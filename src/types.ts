@@ -14,13 +14,17 @@ export interface CheckRun {
 
 export interface Review {
 	author: string;
+	/** GitHub apps (CodeRabbit, Codex, Actions...). */
+	isBot: boolean;
 	state: string;
+	body: string;
 	submittedAt: string;
 	commitOid: string | null;
 }
 
 export interface IssueComment {
 	author: string;
+	isBot: boolean;
 	body: string;
 	createdAt: string;
 	updatedAt: string;
@@ -29,7 +33,12 @@ export interface IssueComment {
 
 export interface ReviewThread {
 	isResolved: boolean;
+	/** Who opened the thread. */
+	firstAuthor: string | null;
 	lastAuthor: string | null;
+	lastIsBot: boolean;
+	lastAt: string | null;
+	lastBody: string;
 }
 
 export interface PullRequest {

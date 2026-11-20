@@ -45,7 +45,7 @@ describe('assess', () => {
 	});
 
 	it('leaves the turn with the author while threads wait for them', () => {
-		const pr = makePr({ ...reviewedByBots, requestedReviewers: ['bob'], threads: [{ isResolved: false, lastAuthor: 'bob' }] });
+		const pr = makePr({ ...reviewedByBots, requestedReviewers: ['bob'], threads: [{ isResolved: false, firstAuthor: 'bob', lastAuthor: 'bob', lastIsBot: false, lastAt: minutesAgo(5), lastBody: 'why?' }] });
 		assert.equal(assess(pr, config, 'alice', NOW).group, 'author');
 		assert.equal(assess(pr, config, 'bob', NOW).group, 'others');
 	});

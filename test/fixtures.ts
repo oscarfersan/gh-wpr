@@ -57,9 +57,12 @@ export const crPaused = (): CheckRun => check({ conclusion: 'SKIPPED', title: 'R
 export const crRunning = (startedMinutesAgo: number): CheckRun =>
 	check({ status: 'IN_PROGRESS', conclusion: null, title: 'Review in progress', startedAt: minutesAgo(startedMinutesAgo), completedAt: null });
 
+const BOTS = new Set(['coderabbitai', 'chatgpt-codex-connector', 'github-actions']);
+
 export function comment(author: string, body: string, createdMinutesAgo: number, updatedMinutesAgo = createdMinutesAgo): IssueComment {
 	return {
 		author,
+		isBot: BOTS.has(author),
 		body,
 		createdAt: minutesAgo(createdMinutesAgo),
 		updatedAt: minutesAgo(updatedMinutesAgo),
@@ -67,8 +70,8 @@ export function comment(author: string, body: string, createdMinutesAgo: number,
 	};
 }
 
-export function review(author: string, commitOid: string, submittedMinutesAgo: number, state = 'COMMENTED'): Review {
-	return { author, state, submittedAt: minutesAgo(submittedMinutesAgo), commitOid };
+export function review(author: string, commitOid: string, submittedMinutesAgo: number, state = 'COMMENTED', body = ''): Review {
+	return { author, isBot: BOTS.has(author), state, body, submittedAt: minutesAgo(submittedMinutesAgo), commitOid };
 }
 
 export const rateLimitNotice = (wait: string, updatedMinutesAgo: number): IssueComment =>

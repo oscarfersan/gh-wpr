@@ -20,9 +20,11 @@ const PR_FIELDS = `
 	repository { nameWithOwner }
 	labels(first: 30) { nodes { name } }
 	reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Bot { login } } } }
-	reviews(last: 40) { nodes { author { login } state submittedAt commit { oid } } }
-	comments(last: 40) { nodes { author { login } body createdAt updatedAt url } }
-	reviewThreads(last: 60) { nodes { isResolved comments(last: 1) { nodes { author { login } } } } }
+	reviews(last: 40) { nodes { author { login __typename } state body submittedAt commit { oid } } }
+	comments(last: 40) { nodes { author { login __typename } body createdAt updatedAt url } }
+	reviewThreads(last: 60) { nodes { isResolved
+		first: comments(first: 1) { nodes { author { login } } }
+		last: comments(last: 1) { nodes { author { login __typename } createdAt body } } } }
 	commits(last: 1) { nodes { commit { oid committedDate statusCheckRollup { contexts(first: 80) { nodes {
 		__typename
 		... on CheckRun { name status conclusion startedAt completedAt title }
@@ -51,7 +53,7 @@ interface LightResult {
 	search: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: (LightPr | Record<string, never>)[] };
 }
 
-type Login = { login: string } | null;
+type Login = { login: string; __typename?: string } | null;
 
 interface RawContext {
 	__typename: string;
@@ -78,9 +80,15 @@ interface RawPr {
 	repository: { nameWithOwner: string };
 	labels: { nodes: { name: string }[] };
 	reviewRequests: { nodes: { requestedReviewer: Login | Record<string, never> }[] };
-	reviews: { nodes: { author: Login; state: string; submittedAt: string; commit: { oid: string } | null }[] };
+	reviews: { nodes: { author: Login; state: string; body: string; submittedAt: string; commit: { oid: string } | null }[] };
 	comments: { nodes: { author: Login; body: string; createdAt: string; updatedAt: string; url: string }[] };
-	reviewThreads: { nodes: { isResolved: boolean; comments: { nodes: { author: Login }[] } }[] };
+	reviewThreads: {
+		nodes: {
+			isResolved: boolean;
+			first: { nodes: { author: Login }[] };
+			last: { nodes: { author: Login; createdAt: string; body: string }[] };
+		}[];
+	};
 	commits: {
 		nodes: {
 			commit: {
@@ -139,21 +147,32 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 			.filter((l): l is string => l !== null),
 		reviews: raw.reviews.nodes.map((r) => ({
 			author: normLogin(r.author?.login),
+			isBot: r.author?.__typename === 'Bot',
 			state: r.state,
+			body: r.body ?? '',
 			submittedAt: r.submittedAt,
 			commitOid: r.commit?.oid ?? null,
 		})),
 		comments: raw.comments.nodes.map((c) => ({
 			author: normLogin(c.author?.login),
+			isBot: c.author?.__typename === 'Bot',
 			body: c.body,
 			createdAt: c.createdAt,
 			updatedAt: c.updatedAt,
 			url: c.url,
 		})),
-		threads: raw.reviewThreads.nodes.map((t) => ({
-			isResolved: t.isResolved,
-			lastAuthor: t.comments.nodes[0] ? normLogin(t.comments.nodes[0].author?.login) : null,
-		})),
+		threads: raw.reviewThreads.nodes.map((t) => {
+			const first = t.first.nodes[0];
+			const last = t.last.nodes[0];
+			return {
+				isResolved: t.isResolved,
+				firstAuthor: first ? normLogin(first.author?.login) : null,
+				lastAuthor: last ? normLogin(last.author?.login) : null,
+				lastIsBot: last?.author?.__typename === 'Bot',
+				lastAt: last?.createdAt ?? null,
+				lastBody: last?.body ?? '',
+			};
+		}),
 	};
 }
 
@@ -178,7 +197,7 @@ async function fetchDetails(targets: { repo: string; number: number }[]): Promis
 }
 
 interface Cache {
-	version: 1;
+	version: 3;
 	fullAt: string | null;
 	prs: Record<string, PullRequest>;
 }
@@ -188,11 +207,11 @@ const cacheFile = (): string => join(stateDir(), 'snapshot.json');
 function readCache(): Cache {
 	try {
 		const parsed = JSON.parse(readFileSync(cacheFile(), 'utf8')) as Cache;
-		if (parsed.version === 1) return parsed;
+		if (parsed.version === 3) return parsed;
 	} catch {
 		// Missing or corrupt cache: start over.
 	}
-	return { version: 1, fullAt: null, prs: {} };
+	return { version: 3, fullAt: null, prs: {} };
 }
 
 function writeCache(cache: Cache): void {
@@ -245,7 +264,7 @@ export async function loadSnapshot(config: Config, options: SnapshotOptions = {}
 	const byKey = new Map(fetched.map((pr) => [prKey(pr), pr]));
 
 	const prs: PullRequest[] = [];
-	const next: Cache = { version: 1, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
+	const next: Cache = { version: 3, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
 	for (const p of light) {
 		const key = prKey({ repo: p.repository.nameWithOwner, number: p.number });
 		const pr = byKey.get(key) ?? cache.prs[key];

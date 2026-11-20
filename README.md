@@ -77,8 +77,19 @@ Each PR has a submenu with the state of CodeRabbit and Codex and the actions tha
 terminal) and **Open on GitHub**. Every refresh also posts the queued requests that are due, so Codex
 goes out on its own once CodeRabbit finishes.
 
-Notifications fire when a PR becomes your turn, when Codex finishes on one of your PRs and when a
-queued request is posted. Turn them off with `"notify": false`.
+Notifications fire when:
+
+- a teammate **approves**, **requests changes** or **comments** on one of your PRs (inline comments
+  included), with a preview of the text;
+- on someone else's PR you take part in (you review it, were asked to, or commented), the author or
+  another teammate approves, requests changes, leaves a general comment, or replies in a thread you
+  opened;
+- a PR becomes your turn, Codex finishes on one of your PRs, or a queued request is posted.
+
+Bots never trigger them, and neither do comments addressed to a bot (`@codex review`,
+`@coderabbitai ...`). Several events on the same PR within one refresh become one notification.
+The first refresh after installing only records the current state. Turn them off with
+`"notify": false`.
 
 SwiftBar does not load your shell profile. The plugin adds Homebrew, `~/.local/bin`, Volta, fnm and
 nvm to `PATH`; for anything else, export it in `~/.config/gh-wpr/swiftbar.env`, for example

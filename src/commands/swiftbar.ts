@@ -44,9 +44,9 @@ export async function swiftbarMenu(): Promise<void> {
 
 		if (config.notify) {
 			const memory = readMemory();
-			for (const notice of [...postedNotices(tick.postedEntries, items), ...notices(memory, items)]) await sendNotice(notice);
+			for (const notice of [...postedNotices(tick.postedEntries, items), ...notices(memory, items, snapshot.viewer, config)]) await sendNotice(notice);
 		}
-		writeMemory(remember(items));
+		writeMemory(remember(items, snapshot.viewer, config));
 
 		const plugin = process.env.GH_WPR_PLUGIN ?? process.env.SWIFTBAR_PLUGIN_PATH ?? PLUGIN_SOURCE;
 		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines }));
