@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ciState } from '../src/ci.ts';
+import { isOpen } from '../src/snapshot.ts';
 import { parseConfig } from '../src/config.ts';
 import { parseTarget } from '../src/target.ts';
 import { assess } from '../src/turn.ts';
@@ -100,5 +101,13 @@ describe('parseConfig', () => {
 	it('rejects unknown settings and bad repos', () => {
 		assert.throws(() => parseConfig({ repos: ['acme/api'], codex: { tiemout: 1 } }), /Unknown setting/);
 		assert.throws(() => parseConfig({ repos: ['acme api'] }), /not a valid/);
+	});
+});
+
+describe('isOpen', () => {
+	it('drops PRs that search still lists as open after a merge', () => {
+		assert.ok(isOpen({ state: 'OPEN' }));
+		assert.ok(!isOpen({ state: 'MERGED' }));
+		assert.ok(!isOpen({ state: 'CLOSED' }));
 	});
 });

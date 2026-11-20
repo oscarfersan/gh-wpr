@@ -15,7 +15,7 @@ import { minutesSince, normLogin } from './util.ts';
  */
 
 const PR_FIELDS = `
-	number title url isDraft mergeable updatedAt headRefOid
+	number title url state isDraft mergeable updatedAt headRefOid
 	author { login }
 	repository { nameWithOwner }
 	labels(first: 30) { nodes { name } }
@@ -72,6 +72,8 @@ interface RawPr {
 	number: number;
 	title: string;
 	url: string;
+	/** OPEN | CLOSED | MERGED */
+	state: string;
 	isDraft: boolean;
 	mergeable: Mergeable;
 	updatedAt: string;
@@ -176,6 +178,12 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 	};
 }
 
+/**
+ * GitHub's search index lags a few minutes behind merges, so `is:open` can still
+ * return a PR that was just merged or closed. Its own `state` is authoritative.
+ */
+export const isOpen = (raw: { state: string }): boolean => raw.state === 'OPEN';
+
 const BATCH = 8;
 
 async function fetchDetails(targets: { repo: string; number: number }[]): Promise<PullRequest[]> {
@@ -190,7 +198,7 @@ async function fetchDetails(targets: { repo: string; number: number }[]): Promis
 		const data = await graphql<Record<string, { pullRequest: RawPr | null } | null>>(`query { ${parts.join('\n')} }`);
 		for (let j = 0; j < batch.length; j++) {
 			const pr = data[`p${j}`]?.pullRequest;
-			if (pr) out.push(mapPullRequest(pr));
+			if (pr && isOpen(pr)) out.push(mapPullRequest(pr));
 		}
 	}
 	return out;
@@ -267,7 +275,8 @@ export async function loadSnapshot(config: Config, options: SnapshotOptions = {}
 	const next: Cache = { version: 3, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
 	for (const p of light) {
 		const key = prKey({ repo: p.repository.nameWithOwner, number: p.number });
-		const pr = byKey.get(key) ?? cache.prs[key];
+		const refetched = stale.some((s) => s.repository.nameWithOwner === p.repository.nameWithOwner && s.number === p.number);
+		const pr = byKey.get(key) ?? (refetched ? undefined : cache.prs[key]);
 		if (!pr) continue;
 		prs.push(pr);
 		next.prs[key] = pr;
