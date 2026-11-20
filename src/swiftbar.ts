@@ -87,7 +87,8 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	const lines: string[] = [];
 	const ref = a.pr.url;
 	lines.push(
-		`#${a.pr.number} ${menuText(a.pr.title)} | sfimage=${GROUP_ICON[a.group]} tooltip=${quote(menuText(`${a.pr.author} · ${a.reason}`, 120))}`,
+		// An action of its own keeps SwiftBar from drawing the item disabled; hovering still opens the submenu.
+		`#${a.pr.number} ${menuText(a.pr.title)} | sfimage=${GROUP_ICON[a.group]} href=${a.pr.url} tooltip=${quote(menuText(`${a.pr.author} · ${a.reason}`, 120))}`,
 	);
 	// Every line links somewhere: SwiftBar greys out lines without an action.
 	const threadsFirst = a.mine && a.pendingThreads.length > 0;

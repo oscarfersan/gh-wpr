@@ -65,7 +65,7 @@ describe('renderMenu', () => {
 
 	it('makes every info line clickable so SwiftBar does not grey it out', () => {
 		const out = renderMenu([mineNeedsCodex()], ctx);
-		for (const line of out.split('\n').filter((l) => /^--[^-]/.test(l))) assert.match(line, /(href|bash)=/, line);
+		for (const line of out.split('\n').filter((l) => /^(#|--[^-])/.test(l))) assert.match(line, /(href|bash)=/, line);
 	});
 
 	it('links the reason to the open thread', () => {
