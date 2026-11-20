@@ -1,0 +1,19 @@
+{
+	"name": "gh-wpr",
+	"version": "0.1.0",
+	"description": "GitHub CLI extension: see whose turn it is on your PRs and request CodeRabbit and Codex reviews in order.",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.ts\"",
+		"typecheck": "tsc -p ."
+	},
+	"devDependencies": {
+		"@types/node": "^24.19.2",
+		"typescript": "^7.0.2"
+	}
+}

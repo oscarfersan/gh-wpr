@@ -1,0 +1,26 @@
+{
+	"repos": ["your-org/your-repo"],
+	"team": ["your-login", "teammate-login"],
+	"ignoreChecks": ["Some flaky workflow"],
+	"fullRefreshMinutes": 10,
+	"coderabbit": {
+		"enabled": true,
+		"login": "coderabbitai",
+		"checkName": "CodeRabbit",
+		"unstickCommand": "@coderabbitai full review",
+		"noStartAfterMinutes": 10,
+		"stuckAfterMinutes": 30,
+		"rateLimitFallbackMinutes": 10
+	},
+	"codex": {
+		"enabled": true,
+		"login": "chatgpt-codex-connector",
+		"command": "@codex review",
+		"timeoutMinutes": 15
+	},
+	"labels": {
+		"needsReview": "needs-review",
+		"needsAuthor": "needs-author-action",
+		"approved": "approved"
+	}
+}
