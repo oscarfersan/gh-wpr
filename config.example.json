@@ -2,6 +2,14 @@
 	"repos": ["your-org/your-repo"],
 	"team": ["your-login", "teammate-login"],
 	"ignoreChecks": ["Some flaky workflow"],
+	"localPaths": {
+		"your-org/your-repo": "~/code/your-repo"
+	},
+	"notify": true,
+	"claude": {
+		"command": "claude",
+		"prompt": "Triage the open review comments on {url}"
+	},
 	"fullRefreshMinutes": 10,
 	"coderabbit": {
 		"enabled": true,

@@ -1,7 +1,9 @@
 import { ai } from './commands/ai.ts';
+import { claude } from './commands/claude.ts';
 import { init } from './commands/init.ts';
 import { nudge, open } from './commands/nudge.ts';
 import { status } from './commands/status.ts';
+import { swiftbarInstall, swiftbarMenu } from './commands/swiftbar.ts';
 import { tick } from './commands/tick.ts';
 import { ConfigError, loadConfig } from './config.ts';
 import { color } from './format.ts';
@@ -19,6 +21,9 @@ Usage
   gh wpr tick [--dry-run] [--quiet]            Post queued requests that are due
   gh wpr nudge <pr> [--dry-run]                Re-request a review from your teammate
   gh wpr open <pr>                             Open the PR in the browser
+  gh wpr claude <pr>                           Start Claude Code in the repo with a prompt about the PR
+  gh wpr swiftbar                              Print the SwiftBar menu (used by the plugin)
+  gh wpr swiftbar install [--dir <folder>]     Install the SwiftBar plugin
   gh wpr init [--repo owner/name]... [--team a,b] [--ignore-check name]... [--yes] [--force]
 
 <pr> is a number, #number, owner/repo#number or a PR URL. Use --repo when you follow
@@ -30,7 +35,7 @@ interface Parsed {
 	flags: Map<string, string[]>;
 }
 
-const VALUE_FLAGS = new Set(['repo', 'bot', 'team', 'ignore-check']);
+const VALUE_FLAGS = new Set(['repo', 'bot', 'team', 'ignore-check', 'dir']);
 
 export function parseArgs(argv: string[]): Parsed {
 	const positional: string[] = [];
@@ -61,6 +66,8 @@ const KNOWN: Record<string, string[]> = {
 	tick: ['dry-run', 'quiet'],
 	nudge: ['dry-run', 'repo'],
 	open: ['repo'],
+	claude: ['repo'],
+	swiftbar: ['dir'],
 	init: ['repo', 'team', 'ignore-check', 'yes', 'force'],
 };
 
@@ -83,6 +90,13 @@ async function main(argv: string[]): Promise<number> {
 
 	if (command === 'init') {
 		return init({ repos: many('repo'), team: many('team'), ignoreChecks: many('ignore-check'), yes: has('yes'), force: has('force') });
+	}
+
+	if (command === 'swiftbar') {
+		if (args[0] === 'install') return swiftbarInstall(one('dir'));
+		if (args.length > 0) throw new UsageError('Usage: gh wpr swiftbar [install [--dir <folder>]]');
+		await swiftbarMenu();
+		return 0;
 	}
 
 	const config = loadConfig();
@@ -114,6 +128,9 @@ async function main(argv: string[]): Promise<number> {
 			if (!args[0]) throw new UsageError('Which PR? Usage: gh wpr open <pr>');
 			await open(config, args[0], one('repo'));
 			return 0;
+		case 'claude':
+			if (!args[0]) throw new UsageError('Which PR? Usage: gh wpr claude <pr>');
+			return claude(config, args[0], one('repo'));
 	}
 	return 0;
 }

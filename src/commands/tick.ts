@@ -11,17 +11,18 @@ const BOT_NAME = { coderabbit: 'CodeRabbit', codex: 'Codex' } as const;
 
 export interface QueueRun {
 	posted: number;
+	postedEntries: QueueEntry[];
 	lines: string[];
 }
 
 /** Posts the queued comments that are due. Each one is re-checked against fresh data first. */
 export async function runQueue(config: Config, snapshot: Snapshot, options: { dryRun: boolean }): Promise<QueueRun> {
 	const entries = readQueue();
-	if (entries.length === 0) return { posted: 0, lines: [] };
+	if (entries.length === 0) return { posted: 0, postedEntries: [], lines: [] };
 
 	const lines: string[] = [];
 	const kept: QueueEntry[] = [];
-	let posted = 0;
+	const postedEntries: QueueEntry[] = [];
 
 	for (const decision of decideQueue(entries, snapshot.prs, config, new Date())) {
 		const { entry } = decision;
@@ -49,7 +50,7 @@ export async function runQueue(config: Config, snapshot: Snapshot, options: { dr
 		}
 		try {
 			const url = await postComment(entry.repo, entry.number, entry.body);
-			posted++;
+			postedEntries.push(entry);
 			lines.push(`${color.green('✓')} ${label}: posted "${entry.body}" (${confirmed.why}) → ${url}`);
 		} catch (error) {
 			kept.push(entry);
@@ -58,7 +59,7 @@ export async function runQueue(config: Config, snapshot: Snapshot, options: { dr
 	}
 
 	if (!options.dryRun) writeQueue(kept);
-	return { posted, lines };
+	return { posted: postedEntries.length, postedEntries, lines };
 }
 
 export async function tick(config: Config, options: { dryRun: boolean; quiet: boolean }): Promise<void> {

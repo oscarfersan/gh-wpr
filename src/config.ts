@@ -31,9 +31,21 @@ export interface LabelsConfig {
 	approved: string;
 }
 
+export interface ClaudeConfig {
+	/** Command that starts Claude Code; extra arguments are allowed ("claude --model opus"). */
+	command: string;
+	/** First prompt. {url}, {number} and {repo} are replaced. */
+	prompt: string;
+}
+
 export interface Config {
 	repos: string[];
 	team: string[];
+	/** Local checkout of each repo, where "gh wpr claude" starts Claude Code. */
+	localPaths: Record<string, string>;
+	/** macOS notifications from the menu bar plugin. */
+	notify: boolean;
+	claude: ClaudeConfig;
 	/** Check names that never count towards CI (e.g. a flaky triage workflow). */
 	ignoreChecks: string[];
 	/** Refetch every PR in full at least this often, even when GitHub reports no change. */
@@ -43,7 +55,12 @@ export interface Config {
 	labels: LabelsConfig;
 }
 
-export const DEFAULTS: Omit<Config, 'repos' | 'team'> = {
+export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
+	notify: true,
+	claude: {
+		command: 'claude',
+		prompt: 'Triage the open review comments on {url}',
+	},
 	ignoreChecks: [],
 	fullRefreshMinutes: 10,
 	coderabbit: {
@@ -108,6 +125,18 @@ export function parseConfig(raw: unknown): Config {
 	const fullRefreshMinutes = raw.fullRefreshMinutes ?? DEFAULTS.fullRefreshMinutes;
 	if (typeof fullRefreshMinutes !== 'number') throw new ConfigError('"fullRefreshMinutes" must be a number');
 
+	const notify = raw.notify ?? DEFAULTS.notify;
+	if (typeof notify !== 'boolean') throw new ConfigError('"notify" must be true or false');
+
+	const localPaths: Record<string, string> = {};
+	if (raw.localPaths !== undefined) {
+		if (!isObject(raw.localPaths)) throw new ConfigError('"localPaths" must map "owner/name" to a folder');
+		for (const [repo, path] of Object.entries(raw.localPaths)) {
+			if (typeof path !== 'string') throw new ConfigError(`"localPaths.${repo}" must be a folder path`);
+			localPaths[repo.toLowerCase()] = path;
+		}
+	}
+
 	const coderabbit = merge(DEFAULTS.coderabbit, raw.coderabbit, 'coderabbit');
 	const codex = merge(DEFAULTS.codex, raw.codex, 'codex');
 	coderabbit.login = normLogin(coderabbit.login);
@@ -116,6 +145,9 @@ export function parseConfig(raw: unknown): Config {
 	return {
 		repos,
 		team: stringList(raw.team, 'team').map(normLogin),
+		localPaths,
+		notify,
+		claude: merge(DEFAULTS.claude, raw.claude, 'claude'),
 		ignoreChecks: stringList(raw.ignoreChecks, 'ignoreChecks'),
 		fullRefreshMinutes,
 		coderabbit,

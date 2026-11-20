@@ -56,9 +56,41 @@ gh wpr ai --mine               Do it for every PR of yours that needs it
 gh wpr tick                    Post queued requests that are due
 gh wpr nudge 123               Re-request a review from your teammate
 gh wpr open 123                Open the PR in the browser
+gh wpr claude 123              Start Claude Code in the repo with a prompt about the PR
 ```
 
 A PR can be given as `123`, `#123`, `owner/repo#123` or its URL.
+
+## Menu bar (SwiftBar)
+
+The [SwiftBar](https://github.com/swiftbar/SwiftBar) plugin puts the same view in the macOS menu bar
+and refreshes it every minute. The number next to the icon is how many PRs are your turn; `⧗n` is
+how many are waiting for the AI.
+
+```bash
+brew install --cask swiftbar   # open it once and choose a plugin folder
+gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folder>
+```
+
+Each PR has a submenu with the state of CodeRabbit and Codex and the actions that make sense for it:
+**Request AI review**, **Ask for review again**, **Triage comments with Claude Code** (opens a
+terminal) and **Open on GitHub**. Every refresh also posts the queued requests that are due, so Codex
+goes out on its own once CodeRabbit finishes.
+
+Notifications fire when a PR becomes your turn, when Codex finishes on one of your PRs and when a
+queued request is posted. Turn them off with `"notify": false`.
+
+SwiftBar does not load your shell profile. The plugin adds Homebrew, `~/.local/bin`, Volta, fnm and
+nvm to `PATH`; for anything else, export it in `~/.config/gh-wpr/swiftbar.env`, for example
+`PATH="/my/node/bin:$PATH"` or `GH_WPR_NODE=/my/node/bin/node`.
+
+Run `gh wpr swiftbar install` again after `gh extension upgrade wpr` to pick up plugin changes.
+
+## Claude Code
+
+`gh wpr claude <pr>` starts Claude Code in the repository's local checkout (`localPaths` in the
+config) with the prompt in `claude.prompt`. `{url}`, `{number}` and `{repo}` are replaced, so a
+project skill works too, e.g. `"prompt": "/triage-pr-comments {url}"`.
 
 ## Team labels (optional)
 
