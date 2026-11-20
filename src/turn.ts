@@ -27,6 +27,8 @@ export interface Assessment {
 	pendingThreads: ReviewThread[];
 	/** The AI button would do something on this PR. */
 	aiActionable: boolean;
+	/** A bot is reviewing, rate limited with a retry pending, or a request is queued. */
+	aiBusy: boolean;
 }
 
 export function assess(pr: PullRequest, config: Config, me: string, now: Date, queue: QueueEntry[] = []): Assessment {
@@ -56,7 +58,7 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		!aiBusy &&
 		(coderabbit.kind === 'needs_unstick' || rateLimitOver || ['never', 'outdated', 'timed_out'].includes(codex.kind));
 
-	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable };
+	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable, aiBusy };
 	const result = (group: Group, reason: string): Assessment => ({ ...base, group, reason });
 
 	if (blockers.length === 0 && labels.has(config.labels.approved.toLowerCase()) && ci !== 'pending') {

@@ -54,6 +54,24 @@ describe('planAi', () => {
 		assert.deepEqual(kinds(plan), ['codex:post']);
 	});
 
+	describe('asking again on purpose (--force)', () => {
+		const done = () => makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] });
+
+		it('re-runs CodeRabbit and queues Codex behind it', () => {
+			const plan = planAi(done(), config, NOW, { force: true });
+			assert.deepEqual(kinds(plan), ['coderabbit:post', 'codex:enqueue']);
+			assert.equal(plan.actions[1].kind === 'enqueue' && plan.actions[1].force, true);
+		});
+
+		it('asks only Codex right away', () => {
+			assert.deepEqual(kinds(planAi(done(), config, NOW, { force: true, only: 'codex' })), ['codex:post']);
+		});
+
+		it('asks only CodeRabbit', () => {
+			assert.deepEqual(kinds(planAi(done(), config, NOW, { force: true, only: 'coderabbit' })), ['coderabbit:post']);
+		});
+	});
+
 	it('refuses drafts and PRs with conflicts', () => {
 		assert.equal(planAi(makePr({ isDraft: true }), config, NOW).blocked, 'the PR is a draft');
 		assert.equal(planAi(makePr({ mergeable: 'CONFLICTING' }), config, NOW).blocked, 'the PR has merge conflicts');

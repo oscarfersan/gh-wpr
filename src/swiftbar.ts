@@ -107,6 +107,16 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	if (codex) lines.push(`--${codex} | size=12 href=${a.pr.url}`);
 	lines.push('-----');
 	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
+	const blocked = a.pr.isDraft || a.pr.mergeable === 'CONFLICTING';
+	if (!a.aiActionable && !a.aiBusy && !blocked) {
+		// Both bots are done with this commit. Asking again is deliberate, so it sits one level deeper.
+		lines.push('--Request AI review again | sfimage=arrow.counterclockwise');
+		const crOn = a.coderabbit.kind !== 'disabled';
+		const codexOn = a.codex.kind !== 'disabled';
+		if (crOn && codexOn) lines.push(`----CodeRabbit, then Codex | ${action(ctx, ['ai', ref, '--force'])}`);
+		if (crOn) lines.push(`----Only CodeRabbit (full review) | ${action(ctx, ['ai', ref, '--bot', 'coderabbit', '--force'])}`);
+		if (codexOn) lines.push(`----Only Codex | ${action(ctx, ['ai', ref, '--bot', 'codex', '--force'])}`);
+	}
 	if (a.mine && a.group === 'others') {
 		lines.push(`--Ask for review again | sfimage=bell ${action(ctx, ['nudge', ref])}`);
 	}

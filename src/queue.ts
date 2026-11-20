@@ -7,7 +7,7 @@ import { stateDir } from './paths.ts';
 import { blockedReason } from './plan.ts';
 import type { Bot, PullRequest } from './types.ts';
 import { prKey } from './types.ts';
-import { minutesSince, short } from './util.ts';
+import { isAfter, minutesSince, short } from './util.ts';
 
 /*
  * Local queue of comments to post later: a CodeRabbit retry after a rate limit,
@@ -25,6 +25,8 @@ export interface QueueEntry {
 	/** Do not post before this time. */
 	notBefore: string | null;
 	createdAt: string;
+	/** Asked for again on purpose: post even if Codex already reviewed this commit. */
+	force?: boolean;
 }
 
 const MAX_AGE_MINUTES = 24 * 60;
@@ -78,9 +80,15 @@ export function decideEntry(entry: QueueEntry, pr: PullRequest | undefined, conf
 	}
 
 	const codex = codexState(pr, config.codex, now);
-	if (codex.kind === 'reviewed' || codex.kind === 'running' || codex.kind === 'disabled') {
+	if (entry.force) {
+		// Only a request made after this one (by anyone) makes it redundant.
+		if (codex.kind === 'running' && isAfter(codex.since, entry.createdAt)) {
+			return { entry, decision: 'drop', why: 'Codex was asked again already' };
+		}
+	} else if (codex.kind === 'reviewed' || codex.kind === 'running' || codex.kind === 'disabled') {
 		return { entry, decision: 'drop', why: `Codex is ${codex.kind}` };
 	}
+	if (codex.kind === 'disabled') return { entry, decision: 'drop', why: 'Codex is disabled' };
 	if (coderabbitDone(cr)) return { entry, decision: 'post', why: 'CodeRabbit finished' };
 	return { entry, decision: 'keep', why: 'waiting for CodeRabbit' };
 }

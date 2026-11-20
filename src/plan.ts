@@ -8,7 +8,7 @@ import { formatAgo, formatClock, short } from './util.ts';
 export type PlannedAction =
 	| { kind: 'post'; bot: Bot; body: string; why: string }
 	| { kind: 'schedule'; bot: 'coderabbit'; body: string; at: string; why: string }
-	| { kind: 'enqueue'; bot: 'codex'; body: string; why: string }
+	| { kind: 'enqueue'; bot: 'codex'; body: string; why: string; force?: boolean }
 	| { kind: 'skip'; bot: Bot; why: string };
 
 export interface PlanOptions {
@@ -84,22 +84,22 @@ export function planAi(pr: PullRequest, config: Config, now: Date, options: Plan
 	if (options.only !== 'coderabbit') {
 		const codex = codexState(pr, config.codex, now);
 		const body = config.codex.command;
-		const crReady = coderabbitDone(cr) || options.only === 'codex';
+		// If CodeRabbit is about to review again (even when forced), Codex waits for it.
+		const crWillRun = actions.some((a) => a.bot === 'coderabbit' && (a.kind === 'post' || a.kind === 'schedule'));
+		const crReady = options.only === 'codex' || (coderabbitDone(cr) && !crWillRun);
+		const forced = (): PlannedAction =>
+			crReady
+				? { kind: 'post', bot: 'codex', body, why: 'forced' }
+				: { kind: 'enqueue', bot: 'codex', body, why: 'forced, queued until CodeRabbit reviews again', force: true };
 		switch (codex.kind) {
 			case 'disabled':
 				break;
 			case 'reviewed':
-				actions.push(
-					force
-						? { kind: 'post', bot: 'codex', body, why: 'forced' }
-						: { kind: 'skip', bot: 'codex', why: `already reviewed ${short(pr.headOid)}` },
-				);
+				actions.push(force ? forced() : { kind: 'skip', bot: 'codex', why: `already reviewed ${short(pr.headOid)}` });
 				break;
 			case 'running':
 				actions.push(
-					force
-						? { kind: 'post', bot: 'codex', body, why: 'forced' }
-						: { kind: 'skip', bot: 'codex', why: `review in progress for ${formatAgo(codex.since, now)}` },
+					force ? forced() : { kind: 'skip', bot: 'codex', why: `review in progress for ${formatAgo(codex.since, now)}` },
 				);
 				break;
 			default: {

@@ -86,6 +86,21 @@ describe('renderMenu', () => {
 		assert.ok(out.includes('----bob · b/c.ts | size=12 href=https://github.com/acme/api/pull/42#discussion_bob'));
 	});
 
+	it('offers asking again once both bots are done', () => {
+		const done = assess(makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] }), config, 'alice', NOW);
+		const out = renderMenu([done], ctx);
+		assert.ok(!out.includes('--Request AI review |'));
+		assert.ok(out.includes('--Request AI review again'));
+		assert.match(out, /----CodeRabbit, then Codex \| .*param3="--force"/);
+		assert.match(out, /----Only Codex \| .*param3="--bot" param4="codex" param5="--force"/);
+	});
+
+	it('does not offer asking again while a bot is busy or the PR has conflicts', () => {
+		const busy = assess(makePr({ checkRuns: [crRunning(2)] }), config, 'alice', NOW);
+		const conflicts = assess(makePr({ number: 43, mergeable: 'CONFLICTING', checkRuns: [check()] }), config, 'alice', NOW);
+		assert.ok(!renderMenu([busy, conflicts], ctx).includes('Request AI review again'));
+	});
+
 	it('renders errors as a warning icon', () => {
 		assert.match(renderError('No config'), /^⚠︎ \| sfimage=exclamationmark\.triangle\n---\nNo config/);
 	});

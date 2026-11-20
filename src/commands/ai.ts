@@ -90,6 +90,7 @@ export async function ai(config: Config, options: AiOptions): Promise<number> {
 							headOid: pr.headOid,
 							notBefore: action.kind === 'schedule' ? action.at : null,
 							createdAt: now.toISOString(),
+							...(action.kind === 'enqueue' && action.force ? { force: true } : {}),
 						});
 						queueChanged = true;
 					}

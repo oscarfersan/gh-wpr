@@ -74,7 +74,9 @@ gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folde
 
 Each PR has a submenu with the state of CodeRabbit and Codex and the actions that make sense for it:
 **Request AI review**, **Ask for review again**, **Triage comments with Claude Code** (opens a
-terminal) and **Open on GitHub**. Every refresh also posts the queued requests that are due, so Codex
+terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
+again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of
+them. It is the menu version of `gh wpr ai <pr> --force [--bot coderabbit|codex]`. Every refresh also posts the queued requests that are due, so Codex
 goes out on its own once CodeRabbit finishes.
 
 Notifications fire when:

@@ -58,6 +58,19 @@ describe('queue', () => {
 		assert.equal(decide(e, makePr({ checkRuns: [check()] })), 'drop');
 	});
 
+	it('keeps a forced Codex request until CodeRabbit reviews again, even if Codex already reviewed', () => {
+		const forced = entry({ force: true, createdAt: minutesAgo(1) });
+		const asked = makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 30), comment('alice', '@coderabbitai full review', 1)] });
+		assert.equal(decide(forced, asked), 'keep');
+		const reviewedAgain = makePr({ checkRuns: [check({ startedAt: minutesAgo(0.5), completedAt: minutesAgo(0.2) })], comments: [codexSummary(HEAD, 'completed', 30), comment('alice', '@coderabbitai full review', 1)] });
+		assert.equal(decide(forced, reviewedAgain), 'post');
+	});
+
+	it('drops a forced Codex request when someone asked Codex after it', () => {
+		const forced = entry({ force: true, createdAt: minutesAgo(3) });
+		assert.equal(decide(forced, makePr({ checkRuns: [check()], comments: [comment('bob', '@codex review', 1)] })), 'drop');
+	});
+
 	it('keeps entries while the PR has conflicts', () => {
 		assert.equal(decide(entry(), makePr({ mergeable: 'CONFLICTING', checkRuns: [check()] })), 'keep');
 	});
