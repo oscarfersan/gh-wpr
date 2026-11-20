@@ -39,6 +39,9 @@ export interface ReviewThread {
 	lastIsBot: boolean;
 	lastAt: string | null;
 	lastBody: string;
+	/** File the thread is on, and a link to its last comment. */
+	path: string | null;
+	url: string | null;
 }
 
 export interface PullRequest {

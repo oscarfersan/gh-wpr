@@ -1,6 +1,6 @@
 import { parseConfig } from '../src/config.ts';
 import type { Config } from '../src/config.ts';
-import type { CheckRun, IssueComment, PullRequest, Review } from '../src/types.ts';
+import type { CheckRun, IssueComment, PullRequest, Review, ReviewThread } from '../src/types.ts';
 
 /** Synthetic data only: this repo is public, so nothing here comes from real PRs. */
 
@@ -72,6 +72,20 @@ export function comment(author: string, body: string, createdMinutesAgo: number,
 
 export function review(author: string, commitOid: string, submittedMinutesAgo: number, state = 'COMMENTED', body = ''): Review {
 	return { author, isBot: BOTS.has(author), state, body, submittedAt: minutesAgo(submittedMinutesAgo), commitOid };
+}
+
+export function thread(firstAuthor: string, lastAuthor: string, overrides: Partial<ReviewThread> = {}): ReviewThread {
+	return {
+		isResolved: false,
+		firstAuthor,
+		lastAuthor,
+		lastIsBot: BOTS.has(lastAuthor),
+		lastAt: minutesAgo(5),
+		lastBody: 'why?',
+		path: 'src/service/repository.ts',
+		url: `https://github.com/acme/api/pull/42#discussion_${firstAuthor}`,
+		...overrides,
+	};
 }
 
 export const rateLimitNotice = (wait: string, updatedMinutesAgo: number): IssueComment =>

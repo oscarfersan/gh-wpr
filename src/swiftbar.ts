@@ -1,8 +1,9 @@
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import type { CodexState } from './bots/codex.ts';
 import { GROUP_TITLE } from './format.ts';
+import type { Config } from './config.ts';
 import type { Assessment, Group } from './turn.ts';
-import { GROUP_ORDER } from './turn.ts';
+import { GROUP_ORDER, openerName } from './turn.ts';
 import { formatAgo, formatClock, short } from './util.ts';
 
 /*
@@ -19,6 +20,7 @@ export interface MenuContext {
 	viewer: string;
 	queued: number;
 	tickLines?: string[];
+	config: Config;
 }
 
 const GROUP_ICON: Record<Group, string> = {
@@ -87,11 +89,21 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	lines.push(
 		`#${a.pr.number} ${menuText(a.pr.title)} | sfimage=${GROUP_ICON[a.group]} tooltip=${quote(menuText(`${a.pr.author} · ${a.reason}`, 120))}`,
 	);
-	lines.push(`--${menuText(`${a.pr.author} · ${a.reason}`, 80)} | size=12`);
+	// Every line links somewhere: SwiftBar greys out lines without an action.
+	const threadsFirst = a.mine && a.pendingThreads.length > 0;
+	const reasonHref = threadsFirst && a.pendingThreads[0].url ? a.pendingThreads[0].url : a.pr.url;
+	lines.push(`--${menuText(`${a.pr.author} · ${a.reason}`, 80)} | size=12 href=${reasonHref}`);
+	if (threadsFirst && a.pendingThreads.length > 1) {
+		for (const t of a.pendingThreads.slice(0, 5)) {
+			if (!t.url) continue;
+			const where = t.path ? t.path.split('/').slice(-2).join('/') : 'conversation';
+			lines.push(`----${menuText(`${openerName(t.firstAuthor, ctx.config)} · ${where}`, 70)} | size=12 href=${t.url}`);
+		}
+	}
 	const cr = coderabbitLine(a.coderabbit, ctx.now);
-	if (cr) lines.push(`--${cr} | size=12`);
+	if (cr) lines.push(`--${cr} | size=12 href=${a.pr.url}/checks`);
 	const codex = codexLine(a.codex, a.queued.some((e) => e.bot === 'codex'), ctx.now);
-	if (codex) lines.push(`--${codex} | size=12`);
+	if (codex) lines.push(`--${codex} | size=12 href=${a.pr.url}`);
 	lines.push('-----');
 	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
 	if (a.mine && a.group === 'others') {

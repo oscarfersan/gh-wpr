@@ -49,7 +49,7 @@ export async function swiftbarMenu(): Promise<void> {
 		writeMemory(remember(items, snapshot.viewer, config));
 
 		const plugin = process.env.GH_WPR_PLUGIN ?? process.env.SWIFTBAR_PLUGIN_PATH ?? PLUGIN_SOURCE;
-		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines }));
+		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines, config }));
 	} catch (error) {
 		process.stdout.write(renderError(error instanceof Error ? error.message : String(error)));
 	}

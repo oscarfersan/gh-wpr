@@ -6,7 +6,7 @@ import { ciState } from './ci.ts';
 import type { CiState } from './ci.ts';
 import type { Config } from './config.ts';
 import type { QueueEntry } from './queue.ts';
-import type { PullRequest } from './types.ts';
+import type { PullRequest, ReviewThread } from './types.ts';
 import { latestBy } from './util.ts';
 
 export type Group = 'author' | 'review' | 'waiting_ai' | 'ready' | 'others';
@@ -23,6 +23,8 @@ export interface Assessment {
 	codex: CodexState;
 	queued: QueueEntry[];
 	threadsAwaitingAuthor: number;
+	/** Unresolved threads whose last word is not the author's, oldest first. */
+	pendingThreads: ReviewThread[];
 	/** The AI button would do something on this PR. */
 	aiActionable: boolean;
 }
@@ -34,7 +36,8 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 	const coderabbit = coderabbitState(pr, config.coderabbit, now);
 	const codex = codexState(pr, config.codex, now);
 	const labels = new Set(pr.labels.map((l) => l.toLowerCase()));
-	const threadsAwaitingAuthor = pr.threads.filter((t) => !t.isResolved && t.lastAuthor !== null && t.lastAuthor !== pr.author).length;
+	const pendingThreads = pr.threads.filter((t) => !t.isResolved && t.lastAuthor !== null && t.lastAuthor !== pr.author);
+	const threadsAwaitingAuthor = pendingThreads.length;
 
 	const blockers: string[] = [];
 	if (pr.isDraft) blockers.push('draft');
@@ -53,7 +56,7 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		!aiBusy &&
 		(coderabbit.kind === 'needs_unstick' || rateLimitOver || ['never', 'outdated', 'timed_out'].includes(codex.kind));
 
-	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, aiActionable };
+	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable };
 	const result = (group: Group, reason: string): Assessment => ({ ...base, group, reason });
 
 	if (blockers.length === 0 && labels.has(config.labels.approved.toLowerCase()) && ci !== 'pending') {
@@ -62,9 +65,7 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 
 	if (mine) {
 		if (blockers.length > 0) return result('author', blockers.join(', '));
-		if (threadsAwaitingAuthor > 0) {
-			return result('author', `${threadsAwaitingAuthor} open thread${threadsAwaitingAuthor > 1 ? 's' : ''} waiting for you`);
-		}
+		if (threadsAwaitingAuthor > 0) return result('author', threadsReason(pendingThreads, config));
 		if (labels.has(config.labels.needsAuthor.toLowerCase())) return result('author', 'changes requested');
 		if (aiBusy) return result('waiting_ai', aiWaitReason(coderabbit, codex, queued));
 		if (aiActionable) return result('author', 'request the AI review');
@@ -89,6 +90,20 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		return result('review', myLastReview && !reviewedHead ? 'new commits since your review' : 'review requested');
 	}
 	return result('others', `${pr.author}'s PR`);
+}
+
+/** Display name for whoever opened a thread: the bots by name, people by login. */
+export function openerName(login: string | null, config: Config): string {
+	if (login === config.coderabbit.login) return 'CodeRabbit';
+	if (login === config.codex.login) return 'Codex';
+	return login ?? 'someone';
+}
+
+/** "1 open CodeRabbit thread waiting for you", "3 open threads waiting for you (Codex, bob)". */
+export function threadsReason(threads: ReviewThread[], config: Config): string {
+	const names = [...new Set(threads.map((t) => openerName(t.firstAuthor, config)))];
+	if (threads.length === 1) return `1 open ${names[0]} thread waiting for you`;
+	return `${threads.length} open threads waiting for you (${names.join(', ')})`;
 }
 
 function aiWaitReason(coderabbit: CodeRabbitState, codex: CodexState, queued: QueueEntry[]): string {

@@ -5,7 +5,7 @@ import { isOpen } from '../src/snapshot.ts';
 import { parseConfig } from '../src/config.ts';
 import { parseTarget } from '../src/target.ts';
 import { assess } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, config, crRateLimited, crRunning, makePr, minutesAgo, review } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
 
 const reviewedByBots = { checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] };
 
@@ -46,9 +46,26 @@ describe('assess', () => {
 	});
 
 	it('leaves the turn with the author while threads wait for them', () => {
-		const pr = makePr({ ...reviewedByBots, requestedReviewers: ['bob'], threads: [{ isResolved: false, firstAuthor: 'bob', lastAuthor: 'bob', lastIsBot: false, lastAt: minutesAgo(5), lastBody: 'why?' }] });
+		const pr = makePr({ ...reviewedByBots, requestedReviewers: ['bob'], threads: [thread('bob', 'bob')] });
 		assert.equal(assess(pr, config, 'alice', NOW).group, 'author');
 		assert.equal(assess(pr, config, 'bob', NOW).group, 'others');
+	});
+
+	it('says who opened the threads waiting for the author', () => {
+		const one = assess(makePr({ ...reviewedByBots, threads: [thread('coderabbitai', 'coderabbitai')] }), config, 'alice', NOW);
+		assert.equal(one.reason, '1 open CodeRabbit thread waiting for you');
+		const many = assess(
+			makePr({ ...reviewedByBots, threads: [thread('chatgpt-codex-connector', 'chatgpt-codex-connector'), thread('bob', 'bob'), thread('bob', 'bob')] }),
+			config,
+			'alice',
+			NOW,
+		);
+		assert.equal(many.reason, '3 open threads waiting for you (Codex, bob)');
+	});
+
+	it('does not count threads where the author had the last word', () => {
+		const a = assess(makePr({ ...reviewedByBots, threads: [thread('coderabbitai', 'alice')] }), config, 'alice', NOW);
+		assert.equal(a.threadsAwaitingAuthor, 0);
 	});
 
 	it('lists approved PRs with green CI as ready', () => {

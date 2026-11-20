@@ -6,9 +6,9 @@ import { notices, postedNotices, remember, snippet } from '../src/notify.ts';
 import { menuText, renderError, renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
 import type { Assessment } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, comment, config, crRunning, makePr, minutesAgo, review } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, comment, config, crRunning, makePr, minutesAgo, review, thread as makeThread } from './fixtures.ts';
 
-const ctx = { plugin: '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0 };
+const ctx = { plugin: '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0, config };
 
 const mineNeedsCodex = (): Assessment => assess(makePr({ checkRuns: [check()] }), config, 'alice', NOW);
 const reviewForBob = (number = 7): Assessment =>
@@ -61,6 +61,29 @@ describe('renderMenu', () => {
 		const a = assess(makePr({ title: 'Parse a | b', checkRuns: [check()] }), config, 'alice', NOW);
 		const line = renderMenu([a], ctx).split('\n').find((l) => l.startsWith('#42'));
 		assert.equal(line?.split('|').length, 2);
+	});
+
+	it('makes every info line clickable so SwiftBar does not grey it out', () => {
+		const out = renderMenu([mineNeedsCodex()], ctx);
+		for (const line of out.split('\n').filter((l) => /^--[^-]/.test(l))) assert.match(line, /(href|bash)=/, line);
+	});
+
+	it('links the reason to the open thread', () => {
+		const a = assess(makePr({ checkRuns: [check()], threads: [makeThread('coderabbitai', 'coderabbitai')] }), config, 'alice', NOW);
+		const out = renderMenu([a], ctx);
+		assert.ok(out.includes('--alice · 1 open CodeRabbit thread waiting for you | size=12 href=https://github.com/acme/api/pull/42#discussion_coderabbitai'));
+	});
+
+	it('lists each thread when there are several', () => {
+		const a = assess(
+			makePr({ checkRuns: [check()], threads: [makeThread('coderabbitai', 'coderabbitai'), makeThread('bob', 'bob', { path: 'src/a/b/c.ts' })] }),
+			config,
+			'alice',
+			NOW,
+		);
+		const out = renderMenu([a], ctx);
+		assert.ok(out.includes('----CodeRabbit · service/repository.ts | size=12 href='));
+		assert.ok(out.includes('----bob · b/c.ts | size=12 href=https://github.com/acme/api/pull/42#discussion_bob'));
 	});
 
 	it('renders errors as a warning icon', () => {
@@ -151,7 +174,7 @@ describe('activity notices', () => {
 	});
 
 	it('announces a reply in a thread I opened on someone else\'s PR', () => {
-		const thread = (lastAuthor: string, lastAt: string) => ({ isResolved: false, firstAuthor: 'alice', lastAuthor, lastIsBot: false, lastAt, lastBody: 'Good catch, fixed' });
+		const thread = (lastAuthor: string, lastAt: string) => makeThread('alice', lastAuthor, { lastAt, lastBody: 'Good catch, fixed' });
 		const pr = (t: ReturnType<typeof thread>) =>
 			assess(makePr({ number: 8, author: 'bob', checkRuns: [check()], reviews: [review('alice', HEAD, 30)], threads: [t], comments: [] }), config, 'alice', NOW);
 		const out = notices(remember([pr(thread('alice', minutesAgo(30)))], 'alice', config), [pr(thread('bob', minutesAgo(1)))], 'alice', config);
