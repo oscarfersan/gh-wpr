@@ -148,6 +148,12 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	}
 	lines.push('-----');
 	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
+	// CodeRabbit reviewed the head without approving it. The "again" submenu below is hidden while
+	// another AI action is pending, so this one stays reachable on its own.
+	const crWithoutApprove = a.coderabbit.kind === 'reviewed' && a.approvals.coderabbit.kind !== 'approved';
+	if (crWithoutApprove && a.aiActionable) {
+		lines.push(`--Ask CodeRabbit to review again | sfimage=arrow.counterclockwise ${action(ctx, ['ai', ref, '--bot', 'coderabbit', '--force'])}`);
+	}
 	const blocked = a.pr.isDraft || a.pr.mergeable === 'CONFLICTING';
 	if (!a.aiActionable && !a.aiBusy && !blocked) {
 		// Both bots are done with this commit. Asking again is deliberate, so it sits one level deeper.

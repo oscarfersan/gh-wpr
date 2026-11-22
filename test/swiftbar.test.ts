@@ -131,6 +131,18 @@ describe('review buttons', () => {
 		assert.throws(() => parseConfig({ repos: ['acme/api'], nudge: { mode: 'comment', comment: 'please review' } }), /\{mentions\}/);
 		assert.throws(() => parseConfig({ repos: ['acme/api'], nudge: { mode: 'shout' } }), /nudge.mode/);
 	});
+
+	it('offers asking CodeRabbit again when it reviewed the head without approving, even with Codex pending', () => {
+		const pr = makePr({ checkRuns: [check()], comments: [codexSummary(OLD, 'completed', 90)], reviews: [review('coderabbitai', OLD, 95, 'APPROVED')] });
+		const out = renderMenu([assess(pr, config, 'alice', NOW)], ctx);
+		assert.ok(out.includes('--Request AI review |'));
+		assert.match(out, /--Ask CodeRabbit to review again .*param2="https:\/\/github.com\/acme\/api\/pull\/42" param3="--bot" param4="coderabbit" param5="--force"/);
+	});
+
+	it('does not offer asking CodeRabbit again once it approved the head', () => {
+		const pr = makePr({ checkRuns: [check()], comments: [codexSummary(OLD, 'completed', 90)], reviews: [review('coderabbitai', HEAD, 5, 'APPROVED')] });
+		assert.ok(!renderMenu([assess(pr, config, 'alice', NOW)], ctx).includes('Ask CodeRabbit to review again'));
+	});
 });
 
 describe('notices', () => {

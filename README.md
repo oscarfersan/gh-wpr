@@ -122,7 +122,8 @@ gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folde
 
 Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer (Notion AI on drafts)
 and the actions that make sense for it:
-**Request AI review**, **Ask bob to review**, **Triage comments with Claude Code** (opens a
+**Request AI review**, **Ask CodeRabbit to review again** (when it reviewed the last commit without
+approving it), **Ask bob to review**, **Triage comments with Claude Code** (opens a
 terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
 again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of
 them. It is the menu version of `gh wpr ai <pr> --force [--bot coderabbit|codex]`. Every refresh also posts the queued requests that are due, so Codex
