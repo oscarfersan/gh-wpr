@@ -28,7 +28,12 @@ describe('codexState', () => {
 	});
 
 	it('is reviewed from a PR review on the head commit', () => {
-		assert.deepEqual(state(makePr({ reviews: [review('chatgpt-codex-connector', HEAD, 5)] })), { kind: 'reviewed' });
+		assert.deepEqual(state(makePr({ reviews: [review('chatgpt-codex-connector', HEAD, 5, 'COMMENTED', '### 💡 Codex Review')] })), { kind: 'reviewed' });
+	});
+
+	it('does not take a reply in a thread for a review of the head', () => {
+		const pr = makePr({ reviews: [review('chatgpt-codex-connector', OLD, 90, 'COMMENTED', '### 💡 Codex Review'), review('chatgpt-codex-connector', HEAD, 5)] });
+		assert.deepEqual(state(pr), { kind: 'outdated', reviewedOid: OLD });
 	});
 
 	it('is running right after a request from anyone', () => {

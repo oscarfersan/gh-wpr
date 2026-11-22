@@ -27,6 +27,13 @@ interface CodexStateJson {
 const matchesHead = (headOid: string, sha: string): boolean =>
 	sha.length >= 7 && headOid.toLowerCase().startsWith(sha.toLowerCase());
 
+/**
+ * Codex's actual reviews. Its replies in a thread also show up as reviews of
+ * whatever commit is the head at the time, but with an empty body.
+ */
+const codexReviews = (pr: PullRequest, config: CodexConfig) =>
+	pr.reviews.filter((r) => r.author === config.login && r.body.trim() !== '');
+
 export function isCodexRequest(body: string, command: string): boolean {
 	return body.trim().toLowerCase().startsWith(command.toLowerCase());
 }
@@ -35,7 +42,7 @@ export function codexState(pr: PullRequest, config: CodexConfig, now: Date): Cod
 	if (!config.enabled) return { kind: 'disabled' };
 
 	const comments = pr.comments.filter((c) => c.author === config.login);
-	const reviews = pr.reviews.filter((r) => r.author === config.login);
+	const reviews = codexReviews(pr, config);
 
 	if (reviews.some((r) => r.commitOid === pr.headOid)) return { kind: 'reviewed' };
 
