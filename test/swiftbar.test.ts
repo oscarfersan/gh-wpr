@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { claudePrompt } from '../src/commands/claude.ts';
+import { nudgeComment } from '../src/commands/nudge.ts';
 import { parseConfig } from '../src/config.ts';
 import { notices, postedNotices, remember, snippet } from '../src/notify.ts';
 import { menuText, renderError, renderMenu } from '../src/swiftbar.ts';
@@ -104,6 +105,31 @@ describe('renderMenu', () => {
 
 	it('renders errors as a warning icon', () => {
 		assert.match(renderError('No config'), /^⚠︎ \| sfimage=exclamationmark\.triangle\n---\nNo config/);
+	});
+});
+
+describe('review buttons', () => {
+	it('asks my reviewer by name until they approve', () => {
+		const a = assess(makePr({ checkRuns: [check()], requestedReviewers: ['bob'] }), config, 'alice', NOW);
+		assert.match(renderMenu([a], ctx), /--Ask bob to review \| sfimage=bell .*param1="nudge"/);
+		const approved = assess(makePr({ checkRuns: [check()], reviews: [review('bob', HEAD, 5, 'APPROVED')] }), config, 'alice', NOW);
+		assert.ok(!renderMenu([approved], ctx).includes('to review |'));
+	});
+
+	it('does not offer it on drafts or on other people\'s PRs', () => {
+		const draft = assess(makePr({ isDraft: true, requestedReviewers: ['bob'] }), config, 'alice', NOW);
+		assert.ok(!renderMenu([draft, reviewForBob()], ctx).includes('to review |'));
+	});
+
+	it('builds the comment from the configured template', () => {
+		const withComment = parseConfig({ repos: ['acme/api'], nudge: { mode: 'comment', comment: '{mentions} review' } });
+		assert.equal(nudgeComment(withComment, ['bob']), '@bob review');
+		assert.equal(nudgeComment(withComment, ['bob', 'carol']), '@bob @carol review');
+	});
+
+	it('rejects a comment that does not say who should review', () => {
+		assert.throws(() => parseConfig({ repos: ['acme/api'], nudge: { mode: 'comment', comment: 'please review' } }), /\{mentions\}/);
+		assert.throws(() => parseConfig({ repos: ['acme/api'], nudge: { mode: 'shout' } }), /nudge.mode/);
 	});
 });
 

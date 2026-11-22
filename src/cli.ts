@@ -19,7 +19,7 @@ Usage
                                                Unstick CodeRabbit if needed, then Codex
   gh wpr ai --mine [--dry-run]                 Same, for every PR of yours that needs it
   gh wpr tick [--dry-run] [--quiet]            Post queued requests that are due
-  gh wpr nudge <pr> [--dry-run]                Re-request a review from your teammate
+  gh wpr nudge <pr> [--dry-run]                Ask your teammate to review again ("nudge.mode" in the config)
   gh wpr open <pr>                             Open the PR in the browser
   gh wpr claude <pr>                           Start Claude Code in the repo with a prompt about the PR
   gh wpr swiftbar                              Print the SwiftBar menu (used by the plugin)

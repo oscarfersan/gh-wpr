@@ -89,12 +89,25 @@ gh wpr ai 123                  Unstick CodeRabbit if needed, then request Codex
 gh wpr ai 123 --dry-run        Show what it would post
 gh wpr ai --mine               Do it for every PR of yours that needs it
 gh wpr tick                    Post queued requests that are due
-gh wpr nudge 123               Re-request a review from your teammate
+gh wpr nudge 123               Ask your teammate to review again (see "Asking for a review")
 gh wpr open 123                Open the PR in the browser
 gh wpr claude 123              Start Claude Code in the repo with a prompt about the PR
 ```
 
 A PR can be given as `123`, `#123`, `owner/repo#123` or its URL.
+
+## Asking for a review
+
+`gh wpr nudge <pr>` (or **Ask bob to review** in the menu) asks your pending reviewers again, else
+the teammates who already reviewed, else the rest of the team. `nudge.mode` says how:
+
+```json
+"nudge": { "mode": "comment", "comment": "{mentions} review" }
+```
+
+`request` re-requests the review on GitHub (the default), `comment` posts the comment with your own
+`gh` login (`{mentions}` becomes `@bob @carol`), and `both` does both. `--dry-run` shows what it
+would do.
 
 ## Menu bar (SwiftBar)
 
@@ -109,7 +122,7 @@ gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folde
 
 Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer (Notion AI on drafts)
 and the actions that make sense for it:
-**Request AI review**, **Ask for review again**, **Triage comments with Claude Code** (opens a
+**Request AI review**, **Ask bob to review**, **Triage comments with Claude Code** (opens a
 terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
 again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of
 them. It is the menu version of `gh wpr ai <pr> --force [--bot coderabbit|codex]`. Every refresh also posts the queued requests that are due, so Codex

@@ -34,6 +34,15 @@ export interface NotionConfig {
 	marker: string;
 }
 
+export type NudgeMode = 'request' | 'comment' | 'both';
+
+export interface NudgeConfig {
+	/** request: GitHub's re-request button · comment: post `comment` · both. */
+	mode: NudgeMode;
+	/** Comment posted in comment mode. {mentions} becomes "@alice @bob". */
+	comment: string;
+}
+
 export interface LabelsConfig {
 	needsReview: string;
 	needsAuthor: string;
@@ -62,6 +71,7 @@ export interface Config {
 	coderabbit: CodeRabbitConfig;
 	codex: CodexConfig;
 	notion: NotionConfig;
+	nudge: NudgeConfig;
 	labels: LabelsConfig;
 }
 
@@ -91,6 +101,10 @@ export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
 	notion: {
 		enabled: true,
 		marker: 'Notion AI review',
+	},
+	nudge: {
+		mode: 'request',
+		comment: '{mentions} review',
 	},
 	labels: {
 		needsReview: 'needs-review',
@@ -127,6 +141,17 @@ function merge<T extends object>(base: T, override: unknown, field: string): T {
 		out[key] = value;
 	}
 	return out as T;
+}
+
+const NUDGE_MODES: NudgeMode[] = ['request', 'comment', 'both'];
+
+function parseNudge(raw: unknown): NudgeConfig {
+	const nudge = merge(DEFAULTS.nudge, raw, 'nudge');
+	if (!NUDGE_MODES.includes(nudge.mode)) throw new ConfigError(`"nudge.mode" must be one of ${NUDGE_MODES.join(', ')}`);
+	if (nudge.mode !== 'request' && !nudge.comment.includes('{mentions}')) {
+		throw new ConfigError('"nudge.comment" needs {mentions} to say who should review');
+	}
+	return nudge;
 }
 
 export function parseConfig(raw: unknown): Config {
@@ -167,6 +192,7 @@ export function parseConfig(raw: unknown): Config {
 		coderabbit,
 		codex,
 		notion: merge(DEFAULTS.notion, raw.notion, 'notion'),
+		nudge: parseNudge(raw.nudge),
 		labels: merge(DEFAULTS.labels, raw.labels, 'labels'),
 	};
 }

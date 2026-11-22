@@ -1,6 +1,7 @@
 import type { Approval } from './bots/approval.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import type { CodexState } from './bots/codex.ts';
+import { nudgeTargets } from './commands/nudge.ts';
 import { GROUP_TITLE } from './format.ts';
 import type { Config } from './config.ts';
 import type { Assessment, Group } from './turn.ts';
@@ -157,8 +158,9 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 		if (crOn) lines.push(`----Only CodeRabbit (full review) | ${action(ctx, ['ai', ref, '--bot', 'coderabbit', '--force'])}`);
 		if (codexOn) lines.push(`----Only Codex | ${action(ctx, ['ai', ref, '--bot', 'codex', '--force'])}`);
 	}
-	if (a.mine && a.group === 'others') {
-		lines.push(`--Ask for review again | sfimage=bell ${action(ctx, ['nudge', ref])}`);
+	if (a.mine && !a.pr.isDraft && a.approvals.human.kind !== 'approved') {
+		const who = nudgeTargets(a.pr, ctx.config, ctx.viewer);
+		if (who.length > 0) lines.push(`--${menuText(`Ask ${who.join(', ')} to review`, 60)} | sfimage=bell ${action(ctx, ['nudge', ref])}`);
 	}
 	if (a.mine && (a.group === 'author' || a.threadsAwaitingAuthor > 0)) {
 		lines.push(`--Triage comments with Claude Code | sfimage=terminal ${action(ctx, ['claude', ref], { terminal: true })}`);

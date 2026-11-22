@@ -30,6 +30,10 @@
 		"enabled": true,
 		"marker": "Notion AI review"
 	},
+	"nudge": {
+		"mode": "comment",
+		"comment": "{mentions} review"
+	},
 	"labels": {
 		"needsReview": "needs-review",
 		"needsAuthor": "needs-author-action",
