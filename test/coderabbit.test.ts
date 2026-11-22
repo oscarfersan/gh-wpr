@@ -115,3 +115,28 @@ describe('coderabbitState', () => {
 		assert.equal(coderabbitState(makePr(), off, NOW).kind, 'disabled');
 	});
 });
+
+describe('coderabbitState after a draft is marked ready', () => {
+	// While the PR was a draft CodeRabbit left a skipped check on the same commit.
+	const draftSkip = check({ conclusion: 'SKIPPED', title: 'Review skipped', startedAt: minutesAgo(58), completedAt: minutesAgo(58) });
+
+	it('waits for the new review instead of treating the draft skip as done', () => {
+		const pr = makePr({ readyAt: minutesAgo(3), checkRuns: [draftSkip] });
+		assert.deepEqual(state(pr), { kind: 'reviewing', since: minutesAgo(3) });
+	});
+
+	it('counts the no-answer time from when the PR left draft', () => {
+		const pr = makePr({ readyAt: minutesAgo(20), checkRuns: [draftSkip] });
+		assert.deepEqual(state(pr), { kind: 'needs_unstick', reason: 'no_response', alreadyRequested: false });
+	});
+
+	it('follows the check CodeRabbit runs once the PR is ready', () => {
+		const pr = makePr({ readyAt: minutesAgo(10), checkRuns: [draftSkip, crRunning(8)] });
+		assert.equal(state(pr).kind, 'reviewing');
+	});
+
+	it('still treats "No files to review" on a ready PR as skipped', () => {
+		const pr = makePr({ readyAt: minutesAgo(120), checkRuns: [check({ conclusion: 'SKIPPED', title: 'No files to review' })] });
+		assert.equal(state(pr).kind, 'skipped');
+	});
+});

@@ -36,3 +36,10 @@ export function formatClock(iso: string): string {
 	const d = new Date(iso);
 	return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+
+/**
+ * When the current head became reviewable: the later of its commit and the PR
+ * leaving draft. Bots skip drafts, so anything they did before that is stale.
+ */
+export const reviewableSince = (pr: { headCommittedAt: string; readyAt: string | null }): string =>
+	pr.readyAt && isAfter(pr.readyAt, pr.headCommittedAt) ? pr.readyAt : pr.headCommittedAt;

@@ -25,6 +25,7 @@ export function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
 		url: 'https://github.com/acme/api/pull/42',
 		author: 'alice',
 		isDraft: false,
+		readyAt: null,
 		mergeable: 'MERGEABLE',
 		updatedAt: minutesAgo(1),
 		headOid: HEAD,

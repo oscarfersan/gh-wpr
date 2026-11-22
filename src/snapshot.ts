@@ -25,6 +25,7 @@ const PR_FIELDS = `
 	reviewThreads(last: 60) { nodes { isResolved path
 		first: comments(first: 1) { nodes { author { login } } }
 		last: comments(last: 1) { nodes { author { login __typename } createdAt body url } } } }
+	timelineItems(last: 1, itemTypes: [READY_FOR_REVIEW_EVENT]) { nodes { ... on ReadyForReviewEvent { createdAt } } }
 	commits(last: 1) { nodes { commit { oid committedDate statusCheckRollup { contexts(first: 80) { nodes {
 		__typename
 		... on CheckRun { name status conclusion startedAt completedAt title }
@@ -84,6 +85,7 @@ interface RawPr {
 	reviewRequests: { nodes: { requestedReviewer: Login | Record<string, never> }[] };
 	reviews: { nodes: { author: Login; state: string; body: string; submittedAt: string; commit: { oid: string } | null }[] };
 	comments: { nodes: { author: Login; body: string; createdAt: string; updatedAt: string; url: string }[] };
+	timelineItems: { nodes: ({ createdAt?: string } | null)[] };
 	reviewThreads: {
 		nodes: {
 			isResolved: boolean;
@@ -137,6 +139,7 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 		url: raw.url,
 		author: normLogin(raw.author?.login),
 		isDraft: raw.isDraft,
+		readyAt: raw.timelineItems.nodes.at(-1)?.createdAt ?? null,
 		mergeable: raw.mergeable,
 		updatedAt: raw.updatedAt,
 		headOid: head?.oid ?? raw.headRefOid,
@@ -208,7 +211,7 @@ async function fetchDetails(targets: { repo: string; number: number }[]): Promis
 }
 
 interface Cache {
-	version: 4;
+	version: 5;
 	fullAt: string | null;
 	prs: Record<string, PullRequest>;
 }
@@ -218,11 +221,11 @@ const cacheFile = (): string => join(stateDir(), 'snapshot.json');
 function readCache(): Cache {
 	try {
 		const parsed = JSON.parse(readFileSync(cacheFile(), 'utf8')) as Cache;
-		if (parsed.version === 4) return parsed;
+		if (parsed.version === 5) return parsed;
 	} catch {
 		// Missing or corrupt cache: start over.
 	}
-	return { version: 4, fullAt: null, prs: {} };
+	return { version: 5, fullAt: null, prs: {} };
 }
 
 function writeCache(cache: Cache): void {
@@ -275,7 +278,7 @@ export async function loadSnapshot(config: Config, options: SnapshotOptions = {}
 	const byKey = new Map(fetched.map((pr) => [prKey(pr), pr]));
 
 	const prs: PullRequest[] = [];
-	const next: Cache = { version: 4, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
+	const next: Cache = { version: 5, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
 	for (const p of light) {
 		const key = prKey({ repo: p.repository.nameWithOwner, number: p.number });
 		const refetched = stale.some((s) => s.repository.nameWithOwner === p.repository.nameWithOwner && s.number === p.number);

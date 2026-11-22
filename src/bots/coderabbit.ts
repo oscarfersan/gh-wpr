@@ -1,6 +1,6 @@
 import type { CodeRabbitConfig } from '../config.ts';
 import type { CheckRun, IssueComment, PullRequest } from '../types.ts';
-import { addMs, isAfter, latestBy, minutesSince } from '../util.ts';
+import { addMs, isAfter, latestBy, minutesSince, reviewableSince } from '../util.ts';
 
 /*
  * CodeRabbit reviews every push on its own. It only needs a nudge
@@ -13,6 +13,9 @@ import { addMs, isAfter, latestBy, minutesSince } from '../util.ts';
  *   skipped   "Review paused"        -> paused after too many pushes
  *   skipped   "No files to review"   -> nothing to review
  *   cancelled / failure              -> failed
+ *
+ * It also skips drafts ("skipping" check). Once the PR is marked ready it
+ * reviews the same commit again, so anything from before that is ignored.
  */
 
 export type UnstickReason = 'paused' | 'failed' | 'no_response' | 'too_slow';
@@ -78,7 +81,7 @@ function stateFromCheck(
 	now: Date,
 ): CodeRabbitState {
 	if (check.status !== 'COMPLETED') {
-		const since = check.startedAt ?? pr.headCommittedAt;
+		const since = check.startedAt ?? reviewableSince(pr);
 		if (minutesSince(since, now) > config.stuckAfterMinutes) {
 			return { kind: 'needs_unstick', reason: 'too_slow', alreadyRequested };
 		}
@@ -104,10 +107,12 @@ function stateFromCheck(
 export function coderabbitState(pr: PullRequest, config: CodeRabbitConfig, now: Date): CodeRabbitState {
 	if (!config.enabled) return { kind: 'disabled' };
 
-	const check = latestCheck(pr, config.checkName);
-	const requests = pr.comments.filter(
-		(c) => !isAfter(pr.headCommittedAt, c.createdAt) && isCodeRabbitRequest(c.body, config.login),
-	);
+	const since = reviewableSince(pr);
+	const headCheck = latestCheck(pr, config.checkName);
+	const headCheckAt = headCheck?.startedAt ?? headCheck?.completedAt ?? null;
+	// A check from while the PR was a draft says nothing about the review CodeRabbit owes now.
+	const check = headCheck && headCheckAt && isAfter(since, headCheckAt) ? null : headCheck;
+	const requests = pr.comments.filter((c) => !isAfter(since, c.createdAt) && isCodeRabbitRequest(c.body, config.login));
 	const lastRequest: IssueComment | null = latestBy(requests, (c) => c.createdAt);
 	const checkStart = check?.startedAt ?? check?.completedAt ?? null;
 	const requestIsNewest = lastRequest !== null && (checkStart === null || isAfter(lastRequest.createdAt, checkStart));
@@ -126,8 +131,8 @@ export function coderabbitState(pr: PullRequest, config: CodeRabbitConfig, now: 
 		return { kind: 'needs_unstick', reason: 'no_response', alreadyRequested: true };
 	}
 
-	if (minutesSince(pr.headCommittedAt, now) <= config.noStartAfterMinutes) {
-		return { kind: 'reviewing', since: pr.headCommittedAt };
+	if (minutesSince(since, now) <= config.noStartAfterMinutes) {
+		return { kind: 'reviewing', since };
 	}
 	return { kind: 'needs_unstick', reason: 'no_response', alreadyRequested: false };
 }

@@ -51,6 +51,8 @@ export interface PullRequest {
 	url: string;
 	author: string;
 	isDraft: boolean;
+	/** Last time the PR left draft, or null if it never was one. */
+	readyAt: string | null;
 	mergeable: Mergeable;
 	updatedAt: string;
 	headOid: string;
