@@ -32,12 +32,14 @@ export function toJson(a: Assessment) {
 		codex: a.codex,
 		queued: a.queued.map((e) => ({ bot: e.bot, notBefore: e.notBefore })),
 		aiActionable: a.aiActionable,
+		isDraft: a.pr.isDraft,
 		approvals: a.approvals,
 		done: a.done,
 		chips: {
 			coderabbit: coderabbitChip(a.coderabbit, a.approvals.coderabbit),
 			codex: codexChip(a.codex, queuedCodex, a.approvals.codex),
 			human: approvalChip(a.approvals.human),
+			notion: approvalChip(a.approvals.notion),
 			ci: ciChip(a.ci),
 		},
 	};

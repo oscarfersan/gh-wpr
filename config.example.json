@@ -26,6 +26,10 @@
 		"command": "@codex review",
 		"timeoutMinutes": 15
 	},
+	"notion": {
+		"enabled": true,
+		"marker": "Notion AI review"
+	},
 	"labels": {
 		"needsReview": "needs-review",
 		"needsAuthor": "needs-author-action",

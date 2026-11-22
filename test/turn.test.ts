@@ -5,7 +5,7 @@ import { isOpen } from '../src/snapshot.ts';
 import { parseConfig } from '../src/config.ts';
 import { parseTarget } from '../src/target.ts';
 import { assess } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
 
 const reviewedByBots = { checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] };
 const approvedByBots = {
@@ -112,6 +112,31 @@ describe('assess', () => {
 	it('lets a later request for changes win over an approval', () => {
 		const pr = makePr({ ...approvedByBots, reviews: [review('bob', HEAD, 30, 'APPROVED'), review('carol', HEAD, 5, 'CHANGES_REQUESTED')] });
 		assert.equal(assess(pr, config, 'alice', NOW).approvals.human.kind, 'changes');
+	});
+
+	it('keeps my drafts out of my turn until Notion AI approves', () => {
+		const draft = assess(makePr({ isDraft: true }), config, 'alice', NOW);
+		assert.equal(draft.group, 'draft');
+		assert.equal(draft.reason, 'draft · waiting for the Notion AI review');
+		const changes = makePr({ isDraft: true, comments: [comment('alice', 'Notes…\n\nNotion AI review: CHANGES REQUESTED for aaaaaaa1', 3)] });
+		assert.equal(assess(changes, config, 'alice', NOW).reason, 'draft · Notion AI asked for changes');
+		const approved = makePr({ isDraft: true, comments: [comment('alice', 'Notion AI review: APPROVED for `aaaaaaa1`', 3)] });
+		const a = assess(approved, config, 'alice', NOW);
+		assert.equal(a.group, 'author');
+		assert.equal(a.reason, 'Notion AI approved, mark it ready for review');
+	});
+
+	it('does not count a Notion AI approval of an older commit', () => {
+		const pr = makePr({ isDraft: true, reviews: [review('alice', OLD, 90, 'COMMENTED', 'Notion AI review: APPROVED for bbbbbbb2')] });
+		const a = assess(pr, config, 'alice', NOW);
+		assert.equal(a.group, 'draft');
+		assert.equal(a.approvals.notion.kind, 'stale');
+	});
+
+	it('lists teammates drafts apart', () => {
+		const a = assess(makePr({ isDraft: true }), config, 'bob', NOW);
+		assert.equal(a.group, 'draft');
+		assert.match(a.reason, /^alice: draft/);
 	});
 });
 

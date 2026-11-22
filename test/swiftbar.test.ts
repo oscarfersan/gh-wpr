@@ -155,6 +155,14 @@ describe('notices', () => {
 		assert.ok(notices(remember([before], 'alice', config), [after], 'alice', config).some((n) => n.title === 'Approved by everyone'));
 	});
 
+	it('shows the Notion AI state instead of the bots on drafts', () => {
+		const a = assess(makePr({ isDraft: true }), config, 'alice', NOW);
+		const out = renderMenu([a], ctx);
+		assert.ok(out.includes('Notion AI: not reviewed yet'));
+		assert.ok(!out.includes('CodeRabbit:'));
+		assert.match(out.split('\n')[0], /^  \| /, 'a draft is not your turn');
+	});
+
 	it('describes requests posted from the queue', () => {
 		const entry = { repo: 'acme/api', number: 42, bot: 'codex' as const, body: '@codex review', headOid: HEAD, notBefore: null, createdAt: minutesAgo(1) };
 		assert.equal(postedNotices([entry], [mineNeedsCodex()])[0].title, 'Requested Codex');

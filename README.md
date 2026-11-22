@@ -5,7 +5,7 @@ A [GitHub CLI](https://cli.github.com) extension for small teams that review pul
 without opening github.com:
 
 - **Whose turn is it?** Open PRs are grouped into *your turn (author)*, *your turn to review*,
-  *waiting for the AI*, *ready to merge* and *someone else's turn*.
+  *waiting for the AI*, *ready to merge*, *drafts* and *someone else's turn*.
 - **Who still has to approve?** A PR is done when CodeRabbit, Codex and a teammate have all approved
   its last commit, in any order.
 - **Do the bots need a nudge?** `gh wpr ai <pr>` posts the right comment, in order, and only when it
@@ -44,6 +44,22 @@ Each reviewer's verdict is about the head commit; a verdict on an older commit d
 
 Codex leaves its 👍 in place after new pushes, so a 👍 older than the head commit (or followed by a
 Codex review of another commit) is ignored. Codex's replies in a thread are not reviews.
+
+## Drafts and Notion AI
+
+Drafts get their own group and do not count as your turn. Bots skip drafts, so they are reviewed
+with Notion AI first through Notion's GitHub connector. That connector posts as the person who asked,
+so Notion AI must end its review with a fixed line naming the verdict and the commit:
+
+```text
+Notion AI review: APPROVED for 3d412b0
+Notion AI review: CHANGES REQUESTED for 3d412b0
+```
+
+A comment, review or thread reply with that line counts. Once Notion AI approves the head, the draft
+becomes your turn: mark it ready for review. CodeRabbit then reviews the same commit again, and
+`gh wpr` waits for that review instead of treating the skipped draft check as done. Change the
+prefix with `notion.marker`, or turn it off with `"notion": { "enabled": false }`.
 
 ## Install
 
@@ -87,8 +103,8 @@ brew install --cask swiftbar   # open it once and choose a plugin folder
 gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folder>
 ```
 
-Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer and the actions that
-make sense for it:
+Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer (Notion AI on drafts)
+and the actions that make sense for it:
 **Request AI review**, **Ask for review again**, **Triage comments with Claude Code** (opens a
 terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
 again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of

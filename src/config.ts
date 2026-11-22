@@ -25,6 +25,15 @@ export interface CodexConfig {
 	timeoutMinutes: number;
 }
 
+export interface NotionConfig {
+	enabled: boolean;
+	/**
+	 * Start of the line Notion AI ends its review with, followed by APPROVED or
+	 * CHANGES REQUESTED and the commit: "Notion AI review: APPROVED for abc1234".
+	 */
+	marker: string;
+}
+
 export interface LabelsConfig {
 	needsReview: string;
 	needsAuthor: string;
@@ -52,6 +61,7 @@ export interface Config {
 	fullRefreshMinutes: number;
 	coderabbit: CodeRabbitConfig;
 	codex: CodexConfig;
+	notion: NotionConfig;
 	labels: LabelsConfig;
 }
 
@@ -77,6 +87,10 @@ export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
 		login: 'chatgpt-codex-connector',
 		command: '@codex review',
 		timeoutMinutes: 15,
+	},
+	notion: {
+		enabled: true,
+		marker: 'Notion AI review',
 	},
 	labels: {
 		needsReview: 'needs-review',
@@ -152,6 +166,7 @@ export function parseConfig(raw: unknown): Config {
 		fullRefreshMinutes,
 		coderabbit,
 		codex,
+		notion: merge(DEFAULTS.notion, raw.notion, 'notion'),
 		labels: merge(DEFAULTS.labels, raw.labels, 'labels'),
 	};
 }

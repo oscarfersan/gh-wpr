@@ -29,6 +29,7 @@ const GROUP_ICON: Record<Group, string> = {
 	review: 'eye',
 	waiting_ai: 'hourglass',
 	ready: 'checkmark.circle',
+	draft: 'pencil.circle',
 	others: 'circle.dotted',
 };
 
@@ -100,6 +101,21 @@ export function humanLine(approval: Approval & { by?: string[] }): string {
 	}
 }
 
+export function notionLine(approval: Approval): string {
+	switch (approval.kind) {
+		case 'disabled':
+			return '';
+		case 'approved':
+			return 'Notion AI: approved the last commit';
+		case 'changes':
+			return 'Notion AI: changes requested on the last commit';
+		case 'stale':
+			return 'Notion AI: reviewed an older commit';
+		case 'none':
+			return 'Notion AI: not reviewed yet';
+	}
+}
+
 function prItem(a: Assessment, ctx: MenuContext): string[] {
 	const lines: string[] = [];
 	const ref = a.pr.url;
@@ -118,11 +134,16 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 			lines.push(`----${menuText(`${openerName(t.firstAuthor, ctx.config)} · ${where}`, 70)} | size=12 href=${t.url}`);
 		}
 	}
-	const cr = coderabbitLine(a.coderabbit, ctx.now, a.approvals.coderabbit);
-	if (cr) lines.push(`--${cr} | size=12 href=${a.pr.url}/checks`);
-	const codex = codexLine(a.codex, a.queued.some((e) => e.bot === 'codex'), ctx.now, a.approvals.codex);
-	if (codex) lines.push(`--${codex} | size=12 href=${a.pr.url}`);
-	lines.push(`--${humanLine(a.approvals.human)} | size=12 href=${a.pr.url}/files`);
+	if (a.pr.isDraft) {
+		const notion = notionLine(a.approvals.notion);
+		if (notion) lines.push(`--${notion} | size=12 href=${a.pr.url}`);
+	} else {
+		const cr = coderabbitLine(a.coderabbit, ctx.now, a.approvals.coderabbit);
+		if (cr) lines.push(`--${cr} | size=12 href=${a.pr.url}/checks`);
+		const codex = codexLine(a.codex, a.queued.some((e) => e.bot === 'codex'), ctx.now, a.approvals.codex);
+		if (codex) lines.push(`--${codex} | size=12 href=${a.pr.url}`);
+		lines.push(`--${humanLine(a.approvals.human)} | size=12 href=${a.pr.url}/files`);
+	}
 	lines.push('-----');
 	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
 	const blocked = a.pr.isDraft || a.pr.mergeable === 'CONFLICTING';

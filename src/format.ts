@@ -28,6 +28,7 @@ export const GROUP_TITLE: Record<Group, string> = {
 	review: 'Your turn to review',
 	waiting_ai: 'Waiting for the AI',
 	ready: 'Ready to merge',
+	draft: 'Drafts · Notion AI',
 	others: 'Someone else’s turn',
 };
 
@@ -106,6 +107,8 @@ export function ciChip(state: CiState): Chip {
 	}
 }
 
+const NONE: Chip = { text: '–', tone: 'none' };
+
 const TONE: Record<Chip['tone'], (s: string) => string> = {
 	ok: color.green,
 	busy: color.magenta,
@@ -130,9 +133,10 @@ export function renderTable(items: Assessment[], now: Date, showRepo: boolean): 
 			const queuedCodex = a.queued.some((e) => e.bot === 'codex');
 			lines.push(
 				`  ${pad(id, showRepo ? 28 : 7)}` +
-					chipCell(coderabbitChip(a.coderabbit, a.approvals.coderabbit), 8) +
-					chipCell(codexChip(a.codex, queuedCodex, a.approvals.codex), 5) +
-					chipCell(approvalChip(a.approvals.human), 4) +
+					// Bots skip drafts, so their columns would only show noise.
+					chipCell(a.pr.isDraft ? NONE : coderabbitChip(a.coderabbit, a.approvals.coderabbit), 8) +
+					chipCell(a.pr.isDraft ? NONE : codexChip(a.codex, queuedCodex, a.approvals.codex), 5) +
+					chipCell(a.pr.isDraft ? approvalChip(a.approvals.notion) : approvalChip(a.approvals.human), 4) +
 					chipCell(ciChip(a.ci), 4) +
 					a.pr.title,
 			);
@@ -141,7 +145,7 @@ export function renderTable(items: Assessment[], now: Date, showRepo: boolean): 
 	}
 	lines.push(
 		'',
-		color.dim('CR CodeRabbit · CX Codex · HU teammate · ✓ approved head · ! wants changes · ✗ changes requested'),
+		color.dim('CR CodeRabbit · CX Codex · HU teammate (Notion AI on drafts) · ✓ approved head · ! wants changes · ✗ changes requested'),
 		color.dim('… running · ⏱ retry at · ⇢ queued after CodeRabbit · old about an older commit'),
 	);
 	return lines.join('\n').replace(/^\n/, '');

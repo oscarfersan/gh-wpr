@@ -3,6 +3,7 @@ import { isApproved } from './bots/approval.ts';
 import { coderabbitApproval, coderabbitState } from './bots/coderabbit.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import { codexApproval, codexState } from './bots/codex.ts';
+import { notionApproval } from './bots/notion.ts';
 import type { CodexState } from './bots/codex.ts';
 import { ciState } from './ci.ts';
 import type { CiState } from './ci.ts';
@@ -11,15 +12,17 @@ import type { QueueEntry } from './queue.ts';
 import type { PullRequest, ReviewThread } from './types.ts';
 import { latestBy } from './util.ts';
 
-export type Group = 'author' | 'review' | 'waiting_ai' | 'ready' | 'others';
+export type Group = 'author' | 'review' | 'waiting_ai' | 'ready' | 'draft' | 'others';
 
-export const GROUP_ORDER: Group[] = ['author', 'review', 'waiting_ai', 'ready', 'others'];
+export const GROUP_ORDER: Group[] = ['author', 'review', 'waiting_ai', 'ready', 'draft', 'others'];
 
 /** Where each reviewer stands on the head commit. Done means CodeRabbit, Codex and a person approved it. */
 export interface Approvals {
 	coderabbit: Approval;
 	codex: Approval;
 	human: Approval & { by?: string[] };
+	/** Only used while the PR is a draft. */
+	notion: Approval;
 }
 
 export interface Assessment {
@@ -76,6 +79,14 @@ export function missingApprovals(approvals: Approvals): string[] {
 	return out;
 }
 
+const NOTION_REASON: Record<Approval['kind'], string> = {
+	disabled: 'draft',
+	approved: 'Notion AI approved, mark it ready for review',
+	changes: 'draft · Notion AI asked for changes',
+	stale: 'draft · Notion AI reviewed an older commit',
+	none: 'draft · waiting for the Notion AI review',
+};
+
 export function assess(pr: PullRequest, config: Config, me: string, now: Date, queue: QueueEntry[] = []): Assessment {
 	const mine = pr.author === me;
 	const queued = queue.filter((e) => e.repo === pr.repo && e.number === pr.number && e.headOid === pr.headOid);
@@ -107,12 +118,21 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		coderabbit: coderabbitApproval(pr, config.coderabbit, coderabbit),
 		codex: codexApproval(pr, config.codex, codex),
 		human: humanApproval(pr, config),
+		notion: notionApproval(pr, config.notion),
 	};
 	const missing = missingApprovals(approvals);
 	const done = missing.length === 0;
 
 	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable, aiBusy, approvals, done };
 	const result = (group: Group, reason: string): Assessment => ({ ...base, group, reason });
+
+	// Drafts go through Notion AI first. They are nobody's turn until it approves.
+	if (pr.isDraft) {
+		const other = blockers.filter((b) => b !== 'draft');
+		const reason = [NOTION_REASON[approvals.notion.kind], ...other].join(', ');
+		if (mine && approvals.notion.kind === 'approved' && other.length === 0) return result('author', reason);
+		return result('draft', mine ? reason : `${pr.author}: ${reason}`);
+	}
 
 	if (blockers.length === 0 && approvals.human.kind === 'approved' && ci !== 'pending') {
 		const bots = missing.filter((m) => m !== 'a reviewer');
