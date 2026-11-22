@@ -1,6 +1,7 @@
 import type { CodeRabbitConfig } from '../config.ts';
 import type { CheckRun, IssueComment, PullRequest } from '../types.ts';
 import { addMs, isAfter, latestBy, minutesSince, reviewableSince } from '../util.ts';
+import type { Approval } from './approval.ts';
 
 /*
  * CodeRabbit reviews every push on its own. It only needs a nudge
@@ -135,4 +136,24 @@ export function coderabbitState(pr: PullRequest, config: CodeRabbitConfig, now: 
 		return { kind: 'reviewing', since };
 	}
 	return { kind: 'needs_unstick', reason: 'no_response', alreadyRequested: false };
+}
+
+/**
+ * CodeRabbit's verdict is its last APPROVED or CHANGES_REQUESTED review. It often
+ * approves on the same commit after the author answers its threads, so the
+ * check run alone is not enough. A commit with nothing to review keeps the
+ * verdict of the one before.
+ */
+export function coderabbitApproval(pr: PullRequest, config: CodeRabbitConfig, state: CodeRabbitState): Approval {
+	if (!config.enabled) return { kind: 'disabled' };
+	const verdict = latestBy(
+		pr.reviews.filter((r) => r.author === config.login && (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED')),
+		(r) => r.submittedAt,
+	);
+	if (!verdict) return { kind: 'none' };
+	const approved = verdict.state === 'APPROVED';
+	if (verdict.commitOid === pr.headOid || (approved && state.kind === 'skipped')) {
+		return approved ? { kind: 'approved', at: verdict.submittedAt } : { kind: 'changes', at: verdict.submittedAt };
+	}
+	return { kind: 'stale', oid: verdict.commitOid };
 }

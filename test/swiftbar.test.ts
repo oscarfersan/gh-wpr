@@ -6,7 +6,7 @@ import { notices, postedNotices, remember, snippet } from '../src/notify.ts';
 import { menuText, renderError, renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
 import type { Assessment } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, comment, config, crRunning, makePr, minutesAgo, review, thread as makeThread } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, crRunning, makePr, minutesAgo, review, thread as makeThread } from './fixtures.ts';
 
 const ctx = { plugin: '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0, config };
 
@@ -123,17 +123,36 @@ describe('notices', () => {
 		assert.deepEqual(notices(remember(items, 'alice', config), items, 'alice', config), []);
 	});
 
-	it('announces when Codex finishes on my PR', () => {
+	it('announces when Codex approves my PR', () => {
 		const running = assess(makePr({ checkRuns: [check()], comments: [comment('alice', '@codex review', 3)] }), config, 'alice', NOW);
-		const done = assess(makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 1)] }), config, 'alice', NOW);
+		const done = assess(makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 1)], reactions: [codexThumbsUp(1)] }), config, 'alice', NOW);
 		const out = notices(remember([running], 'alice', config), [done], 'alice', config);
-		assert.ok(out.some((n) => n.title === 'Codex finished'));
+		assert.ok(out.some((n) => n.title === 'Codex approved 👍'));
+	});
+
+	it('announces when Codex finds issues on my PR', () => {
+		const running = assess(makePr({ checkRuns: [check()], comments: [comment('alice', '@codex review', 3)] }), config, 'alice', NOW);
+		const done = assess(makePr({ checkRuns: [check()], reviews: [review('chatgpt-codex-connector', HEAD, 1, 'COMMENTED', '### 💡 Codex Review')] }), config, 'alice', NOW);
+		assert.ok(notices(remember([running], 'alice', config), [done], 'alice', config).some((n) => n.title === 'Codex found issues'));
+	});
+
+	it('waits for the verdict while only the summary says Codex finished', () => {
+		const running = assess(makePr({ checkRuns: [check()], comments: [comment('alice', '@codex review', 3)] }), config, 'alice', NOW);
+		const summary = assess(makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 1)] }), config, 'alice', NOW);
+		assert.ok(!notices(remember([running], 'alice', config), [summary], 'alice', config).some((n) => n.title.startsWith('Codex')));
 	});
 
 	it('does not announce Codex for a review of an older push', () => {
 		const old = assess(makePr({ headOid: OLD, checkRuns: [check()], comments: [comment('alice', '@codex review', 3)] }), config, 'alice', NOW);
-		const done = assess(makePr({ checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 1)], reviews: [review('bob', OLD, 90)] }), config, 'alice', NOW);
-		assert.ok(!notices(remember([old], 'alice', config), [done], 'alice', config).some((n) => n.title === 'Codex finished'));
+		const done = assess(makePr({ checkRuns: [check()], reactions: [codexThumbsUp(1)], reviews: [review('bob', OLD, 90)] }), config, 'alice', NOW);
+		assert.ok(!notices(remember([old], 'alice', config), [done], 'alice', config).some((n) => n.title.startsWith('Codex')));
+	});
+
+	it('announces when my PR gets all three approves', () => {
+		const approvedByBots = { checkRuns: [check()], reactions: [codexThumbsUp(4)], reviews: [review('coderabbitai', HEAD, 10, 'APPROVED')] };
+		const before = assess(makePr(approvedByBots), config, 'alice', NOW);
+		const after = assess(makePr({ ...approvedByBots, reviews: [...approvedByBots.reviews, review('bob', HEAD, 1, 'APPROVED')] }), config, 'alice', NOW);
+		assert.ok(notices(remember([before], 'alice', config), [after], 'alice', config).some((n) => n.title === 'Approved by everyone'));
 	});
 
 	it('describes requests posted from the queue', () => {

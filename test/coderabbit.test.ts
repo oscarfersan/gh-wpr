@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { coderabbitState, isCodeRabbitRequest, parseRetryDelayMs } from '../src/bots/coderabbit.ts';
+import { coderabbitApproval, coderabbitState, isCodeRabbitRequest, parseRetryDelayMs } from '../src/bots/coderabbit.ts';
 import { HEAD, NOW, OLD, check, comment, config, crPaused, crRateLimited, crRunning, makePr, minutesAgo, rateLimitNotice, review } from './fixtures.ts';
 
 const state = (pr = makePr()) => coderabbitState(pr, config.coderabbit, NOW);
@@ -138,5 +138,29 @@ describe('coderabbitState after a draft is marked ready', () => {
 	it('still treats "No files to review" on a ready PR as skipped', () => {
 		const pr = makePr({ readyAt: minutesAgo(120), checkRuns: [check({ conclusion: 'SKIPPED', title: 'No files to review' })] });
 		assert.equal(state(pr).kind, 'skipped');
+	});
+});
+
+describe('coderabbitApproval', () => {
+	const approval = (pr = makePr()) => coderabbitApproval(pr, config.coderabbit, state(pr));
+
+	it('approves when its last verdict on the head is APPROVED, even after asking for changes', () => {
+		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 40, 'CHANGES_REQUESTED'), review('coderabbitai', HEAD, 10, 'APPROVED')] });
+		assert.equal(approval(pr).kind, 'approved');
+	});
+
+	it('is changes when it asked for changes on the head', () => {
+		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 40, 'CHANGES_REQUESTED'), review('coderabbitai', HEAD, 10, 'COMMENTED')] });
+		assert.equal(approval(pr).kind, 'changes');
+	});
+
+	it('is stale when it approved an older commit', () => {
+		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', OLD, 90, 'APPROVED')] });
+		assert.deepEqual(approval(pr), { kind: 'stale', oid: OLD });
+	});
+
+	it('keeps the approval when the new commit had nothing to review', () => {
+		const pr = makePr({ checkRuns: [check({ conclusion: 'SKIPPED', title: 'No files to review' })], reviews: [review('coderabbitai', OLD, 90, 'APPROVED')] });
+		assert.equal(approval(pr).kind, 'approved');
 	});
 });

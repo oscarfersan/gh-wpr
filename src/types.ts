@@ -44,6 +44,14 @@ export interface ReviewThread {
 	url: string | null;
 }
 
+/** One reaction on the PR description. */
+export interface Reaction {
+	/** THUMBS_UP | EYES | ... (upper case, as GitHub returns it) */
+	content: string;
+	login: string;
+	at: string;
+}
+
 export interface PullRequest {
 	repo: string;
 	number: number;
@@ -53,6 +61,8 @@ export interface PullRequest {
 	isDraft: boolean;
 	/** Last time the PR left draft, or null if it never was one. */
 	readyAt: string | null;
+	/** Reactions on the PR description (Codex puts 👍 there when it finds nothing). */
+	reactions: Reaction[];
 	mergeable: Mergeable;
 	updatedAt: string;
 	headOid: string;

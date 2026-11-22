@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { codexState } from '../src/bots/codex.ts';
-import { HEAD, NOW, OLD, codexSummary, comment, config, makePr, minutesAgo, review } from './fixtures.ts';
+import { codexApproval, codexState } from '../src/bots/codex.ts';
+import { HEAD, NOW, OLD, codexSummary, codexThumbsUp, comment, config, makePr, minutesAgo, review } from './fixtures.ts';
 
 const state = (pr = makePr()) => codexState(pr, config.codex, NOW);
 
@@ -47,5 +47,45 @@ describe('codexState', () => {
 	it('ignores requests from before the head commit', () => {
 		const pr = makePr({ headCommittedAt: minutesAgo(5), comments: [comment('bob', '@codex review', 30), codexSummary(OLD, 'completed', 20)] });
 		assert.equal(state(pr).kind, 'outdated');
+	});
+
+	it('is reviewed from a 👍 on the description given after the head commit', () => {
+		assert.deepEqual(state(makePr({ reactions: [codexThumbsUp(10)] })), { kind: 'reviewed' });
+	});
+
+	it('is running when someone asked again after the 👍', () => {
+		assert.equal(state(makePr({ reactions: [codexThumbsUp(10)], comments: [comment('bob', '@codex review', 3)] })).kind, 'running');
+	});
+});
+
+describe('codexApproval', () => {
+	const approval = (pr = makePr()) => codexApproval(pr, config.codex, codexState(pr, config.codex, NOW));
+
+	it('approves with 👍 on the description after the head commit', () => {
+		assert.equal(approval(makePr({ reactions: [codexThumbsUp(10)] })).kind, 'approved');
+	});
+
+	it('ignores a 👍 from before the head commit', () => {
+		const pr = makePr({ reactions: [codexThumbsUp(90)], comments: [codexSummary(OLD, 'completed', 95)] });
+		assert.equal(approval(pr).kind, 'stale');
+	});
+
+	it('ignores a 👍 followed by a review of another commit', () => {
+		const pr = makePr({ reactions: [codexThumbsUp(30)], comments: [codexSummary(OLD, 'completed', 20)] });
+		assert.equal(approval(pr).kind, 'stale');
+	});
+
+	it('ignores 👍 from people', () => {
+		assert.equal(approval(makePr({ reactions: [{ ...codexThumbsUp(10), login: 'bob' }] })).kind, 'none');
+	});
+
+	it("approves with a \"Didn't find any major issues\" receipt for the head", () => {
+		const receipt = comment('chatgpt-codex-connector', "Codex Review: Didn't find any major issues. Bravo.\n\n**Reviewed commit:** `aaaaaaa111`", 5);
+		assert.equal(approval(makePr({ comments: [receipt] })).kind, 'approved');
+	});
+
+	it('reports changes when it reviewed the head with suggestions', () => {
+		const pr = makePr({ reviews: [review('chatgpt-codex-connector', HEAD, 5, 'COMMENTED', '### 💡 Codex Review')] });
+		assert.equal(approval(pr).kind, 'changes');
 	});
 });

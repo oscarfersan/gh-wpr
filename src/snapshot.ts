@@ -25,6 +25,7 @@ const PR_FIELDS = `
 	reviewThreads(last: 60) { nodes { isResolved path
 		first: comments(first: 1) { nodes { author { login } } }
 		last: comments(last: 1) { nodes { author { login __typename } createdAt body url } } } }
+	reactionGroups { content reactors(last: 20) { edges { reactedAt node { __typename ... on User { login } ... on Bot { login } } } } }
 	timelineItems(last: 1, itemTypes: [READY_FOR_REVIEW_EVENT]) { nodes { ... on ReadyForReviewEvent { createdAt } } }
 	commits(last: 1) { nodes { commit { oid committedDate statusCheckRollup { contexts(first: 80) { nodes {
 		__typename
@@ -85,6 +86,7 @@ interface RawPr {
 	reviewRequests: { nodes: { requestedReviewer: Login | Record<string, never> }[] };
 	reviews: { nodes: { author: Login; state: string; body: string; submittedAt: string; commit: { oid: string } | null }[] };
 	comments: { nodes: { author: Login; body: string; createdAt: string; updatedAt: string; url: string }[] };
+	reactionGroups: { content: string; reactors: { edges: { reactedAt: string; node: { login?: string } | null }[] } }[] | null;
 	timelineItems: { nodes: ({ createdAt?: string } | null)[] };
 	reviewThreads: {
 		nodes: {
@@ -140,6 +142,11 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 		author: normLogin(raw.author?.login),
 		isDraft: raw.isDraft,
 		readyAt: raw.timelineItems.nodes.at(-1)?.createdAt ?? null,
+		reactions: (raw.reactionGroups ?? []).flatMap((g) =>
+			g.reactors.edges
+				.filter((e) => e.node?.login)
+				.map((e) => ({ content: g.content, login: normLogin(e.node?.login), at: e.reactedAt })),
+		),
 		mergeable: raw.mergeable,
 		updatedAt: raw.updatedAt,
 		headOid: head?.oid ?? raw.headRefOid,

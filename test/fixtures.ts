@@ -26,6 +26,7 @@ export function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
 		author: 'alice',
 		isDraft: false,
 		readyAt: null,
+		reactions: [],
 		mergeable: 'MERGEABLE',
 		updatedAt: minutesAgo(1),
 		headOid: HEAD,
@@ -102,3 +103,5 @@ export const codexSummary = (sha: string, status: string, updatedMinutesAgo: num
 		`<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {"code_review":{"commit_sha":"${sha}","status":"${status}"}} -->\nSummary`,
 		updatedMinutesAgo,
 	);
+
+export const codexThumbsUp = (minutesAgoAt: number) => ({ content: 'THUMBS_UP', login: 'chatgpt-codex-connector', at: minutesAgo(minutesAgoAt) });

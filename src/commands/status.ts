@@ -1,5 +1,5 @@
 import type { Config } from '../config.ts';
-import { ciChip, codexChip, coderabbitChip, GROUP_TITLE, renderTable } from '../format.ts';
+import { approvalChip, ciChip, codexChip, coderabbitChip, GROUP_TITLE, renderTable } from '../format.ts';
 import { readQueue } from '../queue.ts';
 import { loadSnapshot } from '../snapshot.ts';
 import { assessAll } from '../turn.ts';
@@ -32,9 +32,12 @@ export function toJson(a: Assessment) {
 		codex: a.codex,
 		queued: a.queued.map((e) => ({ bot: e.bot, notBefore: e.notBefore })),
 		aiActionable: a.aiActionable,
+		approvals: a.approvals,
+		done: a.done,
 		chips: {
-			coderabbit: coderabbitChip(a.coderabbit),
-			codex: codexChip(a.codex, queuedCodex),
+			coderabbit: coderabbitChip(a.coderabbit, a.approvals.coderabbit),
+			codex: codexChip(a.codex, queuedCodex, a.approvals.codex),
+			human: approvalChip(a.approvals.human),
 			ci: ciChip(a.ci),
 		},
 	};

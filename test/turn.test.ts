@@ -5,9 +5,15 @@ import { isOpen } from '../src/snapshot.ts';
 import { parseConfig } from '../src/config.ts';
 import { parseTarget } from '../src/target.ts';
 import { assess } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
 
 const reviewedByBots = { checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] };
+const approvedByBots = {
+	checkRuns: [check()],
+	comments: [codexSummary(HEAD, 'completed', 5)],
+	reactions: [codexThumbsUp(4)],
+	reviews: [review('coderabbitai', HEAD, 10, 'APPROVED')],
+};
 
 describe('assess', () => {
 	it('puts my PR with conflicts on my side', () => {
@@ -73,10 +79,39 @@ describe('assess', () => {
 		assert.equal(assess(pr, config, 'alice', NOW).group, 'ready');
 	});
 
-	it('shows my PR as waiting for the reviewer once the bots are done', () => {
-		const a = assess(makePr({ ...reviewedByBots, requestedReviewers: ['bob'] }), config, 'alice', NOW);
+	it('shows my PR as waiting for the reviewer once the bots approved', () => {
+		const a = assess(makePr({ ...approvedByBots, requestedReviewers: ['bob'] }), config, 'alice', NOW);
 		assert.equal(a.group, 'others');
 		assert.equal(a.reason, 'waiting for bob');
+	});
+
+	it('says which bot has not approved the head yet', () => {
+		const reviews = [review('coderabbitai', HEAD, 10, 'APPROVED'), review('chatgpt-codex-connector', HEAD, 6, 'COMMENTED', '### 💡 Codex Review')];
+		const a = assess(makePr({ ...reviewedByBots, reviews, requestedReviewers: ['bob'] }), config, 'alice', NOW);
+		assert.equal(a.approvals.coderabbit.kind, 'approved');
+		assert.equal(a.approvals.codex.kind, 'changes');
+		assert.equal(a.reason, "waiting for Codex's approve, bob");
+	});
+
+	it('is done with CodeRabbit, Codex and a teammate approving, in any order', () => {
+		const pr = makePr({ ...approvedByBots, reviews: [review('bob', HEAD, 30, 'APPROVED'), review('coderabbitai', HEAD, 10, 'APPROVED')] });
+		const a = assess(pr, config, 'alice', NOW);
+		assert.ok(a.done);
+		assert.equal(a.group, 'ready');
+		assert.equal(a.reason, 'approved by everyone');
+	});
+
+	it('lists a teammate-approved PR as ready but says which bot is missing', () => {
+		const pr = makePr({ ...reviewedByBots, reviews: [review('bob', HEAD, 30, 'APPROVED')] });
+		const a = assess(pr, config, 'alice', NOW);
+		assert.equal(a.group, 'ready');
+		assert.equal(a.reason, 'approved · CodeRabbit and Codex not approved yet');
+		assert.ok(!a.done);
+	});
+
+	it('lets a later request for changes win over an approval', () => {
+		const pr = makePr({ ...approvedByBots, reviews: [review('bob', HEAD, 30, 'APPROVED'), review('carol', HEAD, 5, 'CHANGES_REQUESTED')] });
+		assert.equal(assess(pr, config, 'alice', NOW).approvals.human.kind, 'changes');
 	});
 });
 

@@ -1,3 +1,4 @@
+import type { Approval } from './bots/approval.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import type { CodexState } from './bots/codex.ts';
 import { GROUP_TITLE } from './format.ts';
@@ -44,14 +45,16 @@ function action(ctx: MenuContext, args: string[], options: { terminal?: boolean 
 	return `bash=${quote(ctx.plugin)} ${params} terminal=${options.terminal ? 'true' : 'false'} refresh=true`;
 }
 
-export function coderabbitLine(state: CodeRabbitState, now: Date): string {
+export function coderabbitLine(state: CodeRabbitState, now: Date, approval?: Approval): string {
 	switch (state.kind) {
 		case 'disabled':
 			return '';
 		case 'reviewed':
-			return 'CodeRabbit: reviewed the last commit';
+			if (approval?.kind === 'approved') return 'CodeRabbit: approved the last commit';
+			if (approval?.kind === 'changes') return 'CodeRabbit: changes requested on the last commit';
+			return 'CodeRabbit: reviewed the last commit, no approve yet';
 		case 'skipped':
-			return 'CodeRabbit: nothing to review';
+			return approval?.kind === 'approved' ? 'CodeRabbit: approved (nothing new to review)' : 'CodeRabbit: nothing to review';
 		case 'reviewing':
 			return `CodeRabbit: reviewing (${formatAgo(state.since, now)})`;
 		case 'requested':
@@ -65,12 +68,14 @@ export function coderabbitLine(state: CodeRabbitState, now: Date): string {
 	}
 }
 
-export function codexLine(state: CodexState, queued: boolean, now: Date): string {
+export function codexLine(state: CodexState, queued: boolean, now: Date, approval?: Approval): string {
 	if (queued) return 'Codex: queued until CodeRabbit finishes';
 	switch (state.kind) {
 		case 'disabled':
 			return '';
 		case 'reviewed':
+			if (approval?.kind === 'approved') return 'Codex: approved the last commit 👍';
+			if (approval?.kind === 'changes') return 'Codex: found issues in the last commit';
 			return 'Codex: reviewed the last commit';
 		case 'running':
 			return `Codex: reviewing (${formatAgo(state.since, now)})`;
@@ -80,6 +85,18 @@ export function codexLine(state: CodexState, queued: boolean, now: Date): string
 			return 'Codex: no answer to the last request';
 		case 'never':
 			return 'Codex: not requested';
+	}
+}
+
+export function humanLine(approval: Approval & { by?: string[] }): string {
+	const by = approval.by?.length ? ` by ${approval.by.join(', ')}` : '';
+	switch (approval.kind) {
+		case 'approved':
+			return `Reviewer: approved${by}`;
+		case 'changes':
+			return `Reviewer: changes requested${by}`;
+		default:
+			return 'Reviewer: no approve yet';
 	}
 }
 
@@ -101,10 +118,11 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 			lines.push(`----${menuText(`${openerName(t.firstAuthor, ctx.config)} · ${where}`, 70)} | size=12 href=${t.url}`);
 		}
 	}
-	const cr = coderabbitLine(a.coderabbit, ctx.now);
+	const cr = coderabbitLine(a.coderabbit, ctx.now, a.approvals.coderabbit);
 	if (cr) lines.push(`--${cr} | size=12 href=${a.pr.url}/checks`);
-	const codex = codexLine(a.codex, a.queued.some((e) => e.bot === 'codex'), ctx.now);
+	const codex = codexLine(a.codex, a.queued.some((e) => e.bot === 'codex'), ctx.now, a.approvals.codex);
 	if (codex) lines.push(`--${codex} | size=12 href=${a.pr.url}`);
+	lines.push(`--${humanLine(a.approvals.human)} | size=12 href=${a.pr.url}/files`);
 	lines.push('-----');
 	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
 	const blocked = a.pr.isDraft || a.pr.mergeable === 'CONFLICTING';

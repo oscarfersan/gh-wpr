@@ -1,6 +1,8 @@
-import { coderabbitState } from './bots/coderabbit.ts';
+import type { Approval } from './bots/approval.ts';
+import { isApproved } from './bots/approval.ts';
+import { coderabbitApproval, coderabbitState } from './bots/coderabbit.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
-import { codexState } from './bots/codex.ts';
+import { codexApproval, codexState } from './bots/codex.ts';
 import type { CodexState } from './bots/codex.ts';
 import { ciState } from './ci.ts';
 import type { CiState } from './ci.ts';
@@ -12,6 +14,13 @@ import { latestBy } from './util.ts';
 export type Group = 'author' | 'review' | 'waiting_ai' | 'ready' | 'others';
 
 export const GROUP_ORDER: Group[] = ['author', 'review', 'waiting_ai', 'ready', 'others'];
+
+/** Where each reviewer stands on the head commit. Done means CodeRabbit, Codex and a person approved it. */
+export interface Approvals {
+	coderabbit: Approval;
+	codex: Approval;
+	human: Approval & { by?: string[] };
+}
 
 export interface Assessment {
 	pr: PullRequest;
@@ -29,6 +38,42 @@ export interface Assessment {
 	aiActionable: boolean;
 	/** A bot is reviewing, rate limited with a retry pending, or a request is queued. */
 	aiBusy: boolean;
+	approvals: Approvals;
+	/** CodeRabbit, Codex and a person approved the head commit. */
+	done: boolean;
+}
+
+/**
+ * A person approved: the last APPROVED / CHANGES_REQUESTED review of each
+ * reviewer, or the team's `approved` label. One request for changes wins.
+ */
+export function humanApproval(pr: PullRequest, config: Config): Approvals['human'] {
+	const bots = new Set([config.coderabbit.login, config.codex.login]);
+	const latest = new Map<string, { state: string; at: string }>();
+	for (const r of pr.reviews) {
+		if (r.isBot || bots.has(r.author) || r.author === pr.author) continue;
+		if (r.state !== 'APPROVED' && r.state !== 'CHANGES_REQUESTED') continue;
+		const prev = latest.get(r.author);
+		if (!prev || Date.parse(r.submittedAt) > Date.parse(prev.at)) latest.set(r.author, { state: r.state, at: r.submittedAt });
+	}
+	const entries = [...latest.entries()];
+	const changes = entries.filter(([, v]) => v.state === 'CHANGES_REQUESTED');
+	if (changes.length > 0) return { kind: 'changes', at: changes[0][1].at, by: changes.map(([who]) => who) };
+	const approved = entries.filter(([, v]) => v.state === 'APPROVED');
+	if (approved.length > 0) return { kind: 'approved', at: approved[0][1].at, by: approved.map(([who]) => who) };
+	if (pr.labels.some((l) => l.toLowerCase() === config.labels.approved.toLowerCase())) {
+		return { kind: 'approved', at: pr.updatedAt, by: [] };
+	}
+	return { kind: 'none' };
+}
+
+/** "CodeRabbit, Codex" — who still has to approve the head commit. */
+export function missingApprovals(approvals: Approvals): string[] {
+	const out: string[] = [];
+	if (!isApproved(approvals.coderabbit)) out.push('CodeRabbit');
+	if (!isApproved(approvals.codex)) out.push('Codex');
+	if (!isApproved(approvals.human)) out.push('a reviewer');
+	return out;
 }
 
 export function assess(pr: PullRequest, config: Config, me: string, now: Date, queue: QueueEntry[] = []): Assessment {
@@ -58,11 +103,20 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		!aiBusy &&
 		(coderabbit.kind === 'needs_unstick' || rateLimitOver || ['never', 'outdated', 'timed_out'].includes(codex.kind));
 
-	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable, aiBusy };
+	const approvals: Approvals = {
+		coderabbit: coderabbitApproval(pr, config.coderabbit, coderabbit),
+		codex: codexApproval(pr, config.codex, codex),
+		human: humanApproval(pr, config),
+	};
+	const missing = missingApprovals(approvals);
+	const done = missing.length === 0;
+
+	const base = { pr, mine, ci, coderabbit, codex, queued, threadsAwaitingAuthor, pendingThreads, aiActionable, aiBusy, approvals, done };
 	const result = (group: Group, reason: string): Assessment => ({ ...base, group, reason });
 
-	if (blockers.length === 0 && labels.has(config.labels.approved.toLowerCase()) && ci !== 'pending') {
-		return result('ready', 'approved');
+	if (blockers.length === 0 && approvals.human.kind === 'approved' && ci !== 'pending') {
+		const bots = missing.filter((m) => m !== 'a reviewer');
+		return result('ready', bots.length ? `approved · ${bots.join(' and ')} not approved yet` : 'approved by everyone');
 	}
 
 	if (mine) {
@@ -72,7 +126,8 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		if (aiBusy) return result('waiting_ai', aiWaitReason(coderabbit, codex, queued));
 		if (aiActionable) return result('author', 'request the AI review');
 		const reviewers = pr.requestedReviewers.filter((r) => r !== me);
-		return result('others', reviewers.length ? `waiting for ${reviewers.join(', ')}` : 'waiting for review');
+		const waitingFor = missing.flatMap((m) => (m === 'a reviewer' ? (reviewers.length ? reviewers : ['review']) : [`${m}'s approve`]));
+		return result('others', `waiting for ${waitingFor.join(', ')}`);
 	}
 
 	if (blockers.length > 0) return result('others', `${pr.author}: ${blockers.join(', ')}`);

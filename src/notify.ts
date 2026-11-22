@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { Approval } from './bots/approval.ts';
 import type { CodexState } from './bots/codex.ts';
 import type { Config } from './config.ts';
 import { stateDir } from './paths.ts';
@@ -20,6 +21,10 @@ export interface Remembered {
 	headOid: string;
 	/** Newest comment or review by someone else (not a bot). Missing in memories from older versions. */
 	lastActivityAt?: string;
+	/** Codex's verdict on the head. Missing in memories from older versions. */
+	codexVerdict?: Approval['kind'];
+	/** CodeRabbit, Codex and a teammate approved the head. Missing in memories from older versions. */
+	done?: boolean;
 }
 
 export type ActivityKind = 'approved' | 'changes' | 'commented';
@@ -130,6 +135,8 @@ export function remember(items: Assessment[], me: string, config: Config): Memor
 			codex: a.codex.kind,
 			headOid: a.pr.headOid,
 			lastActivityAt: events.at(-1)?.at ?? '',
+			codexVerdict: a.approvals.codex.kind,
+			done: a.done,
 		};
 	}
 	return memory;
@@ -161,8 +168,13 @@ export function notices(previous: Memory | null, items: Assessment[], me: string
 		} else if (a.group === 'author' && before !== undefined && before.group !== 'author') {
 			out.push({ title: 'Your turn', body: `${label}\n${a.reason}`, url: a.pr.url });
 		}
-		if (a.mine && a.codex.kind === 'reviewed' && before && before.codex !== 'reviewed' && before.headOid === a.pr.headOid) {
-			out.push({ title: 'Codex finished', body: label, url: a.pr.url });
+		const verdict = a.approvals.codex.kind;
+		const verdictChanged = before?.codexVerdict !== undefined ? before.codexVerdict !== verdict : before?.codex !== 'reviewed';
+		if (a.mine && before?.headOid === a.pr.headOid && verdictChanged && (verdict === 'approved' || verdict === 'changes')) {
+			out.push({ title: verdict === 'approved' ? 'Codex approved 👍' : 'Codex found issues', body: label, url: a.pr.url });
+		}
+		if (a.mine && a.done && before?.done === false) {
+			out.push({ title: 'Approved by everyone', body: `${label}\nCodeRabbit, Codex and a teammate approved it`, url: a.pr.url });
 		}
 	}
 	return out;

@@ -1,3 +1,4 @@
+import type { Approval } from './bots/approval.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import type { CodexState } from './bots/codex.ts';
 import type { CiState } from './ci.ts';
@@ -36,14 +37,34 @@ export interface Chip {
 	tone: 'ok' | 'busy' | 'warn' | 'bad' | 'none';
 }
 
-export function coderabbitChip(state: CodeRabbitState): Chip {
+/** A bot that finished with the head shows its verdict: ✓ approved, ! wants changes, · no verdict. */
+function verdictChip(approval: Approval | undefined, fallback: Chip): Chip {
+	if (approval?.kind === 'approved') return { text: '✓', tone: 'ok' };
+	if (approval?.kind === 'changes') return { text: '!', tone: 'warn' };
+	return approval ? { text: '·', tone: 'none' } : fallback;
+}
+
+export function approvalChip(approval: Approval): Chip {
+	switch (approval.kind) {
+		case 'approved':
+			return { text: '✓', tone: 'ok' };
+		case 'changes':
+			return { text: '✗', tone: 'bad' };
+		case 'stale':
+			return { text: 'old', tone: 'warn' };
+		default:
+			return { text: '–', tone: 'none' };
+	}
+}
+
+export function coderabbitChip(state: CodeRabbitState, approval?: Approval): Chip {
 	switch (state.kind) {
 		case 'disabled':
 			return { text: '', tone: 'none' };
 		case 'reviewed':
-			return { text: '✓', tone: 'ok' };
+			return verdictChip(approval, { text: '✓', tone: 'ok' });
 		case 'skipped':
-			return { text: 'skip', tone: 'ok' };
+			return approval?.kind === 'approved' ? { text: '✓', tone: 'ok' } : { text: 'skip', tone: 'ok' };
 		case 'reviewing':
 		case 'requested':
 			return { text: '…', tone: 'busy' };
@@ -54,13 +75,13 @@ export function coderabbitChip(state: CodeRabbitState): Chip {
 	}
 }
 
-export function codexChip(state: CodexState, queued: boolean): Chip {
+export function codexChip(state: CodexState, queued: boolean, approval?: Approval): Chip {
 	if (queued) return { text: '⇢', tone: 'busy' };
 	switch (state.kind) {
 		case 'disabled':
 			return { text: '', tone: 'none' };
 		case 'reviewed':
-			return { text: '✓', tone: 'ok' };
+			return verdictChip(approval, { text: '✓', tone: 'ok' });
 		case 'running':
 			return { text: '…', tone: 'busy' };
 		case 'outdated':
@@ -103,20 +124,25 @@ export function renderTable(items: Assessment[], now: Date, showRepo: boolean): 
 		const rows = items.filter((a) => a.group === group);
 		if (rows.length === 0) continue;
 		lines.push('', color.bold(`${GROUP_TITLE[group]} · ${rows.length}`));
-		lines.push(color.dim(`  ${pad('PR', showRepo ? 28 : 7)}${pad('CR', 8)}${pad('CX', 5)}${pad('CI', 4)}TITLE`));
+		lines.push(color.dim(`  ${pad('PR', showRepo ? 28 : 7)}${pad('CR', 8)}${pad('CX', 5)}${pad('HU', 4)}${pad('CI', 4)}TITLE`));
 		for (const a of rows) {
 			const id = showRepo ? `${a.pr.repo.split('/')[1]}#${a.pr.number}` : `#${a.pr.number}`;
 			const queuedCodex = a.queued.some((e) => e.bot === 'codex');
 			lines.push(
 				`  ${pad(id, showRepo ? 28 : 7)}` +
-					chipCell(coderabbitChip(a.coderabbit), 8) +
-					chipCell(codexChip(a.codex, queuedCodex), 5) +
+					chipCell(coderabbitChip(a.coderabbit, a.approvals.coderabbit), 8) +
+					chipCell(codexChip(a.codex, queuedCodex, a.approvals.codex), 5) +
+					chipCell(approvalChip(a.approvals.human), 4) +
 					chipCell(ciChip(a.ci), 4) +
 					a.pr.title,
 			);
 			lines.push(color.dim(`  ${pad('', showRepo ? 28 : 7)}${a.pr.author} · ${a.reason} · updated ${formatAgo(a.pr.updatedAt, now)} ago`));
 		}
 	}
-	lines.push('', color.dim('CR CodeRabbit · CX Codex · ✓ reviewed head · … running · ⏱ retry at · ⇢ queued after CodeRabbit · old reviewed an older commit'));
+	lines.push(
+		'',
+		color.dim('CR CodeRabbit · CX Codex · HU teammate · ✓ approved head · ! wants changes · ✗ changes requested'),
+		color.dim('… running · ⏱ retry at · ⇢ queued after CodeRabbit · old about an older commit'),
+	);
 	return lines.join('\n').replace(/^\n/, '');
 }

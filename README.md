@@ -6,6 +6,8 @@ without opening github.com:
 
 - **Whose turn is it?** Open PRs are grouped into *your turn (author)*, *your turn to review*,
   *waiting for the AI*, *ready to merge* and *someone else's turn*.
+- **Who still has to approve?** A PR is done when CodeRabbit, Codex and a teammate have all approved
+  its last commit, in any order.
 - **Do the bots need a nudge?** `gh wpr ai <pr>` posts the right comment, in order, and only when it
   is needed.
 
@@ -29,6 +31,19 @@ reviewed the head commit, and that the PR is not a draft or in conflict. `--forc
 Queued requests live on your machine (`~/.local/state/gh-wpr/queue.json`) and are posted by
 `gh wpr tick`. A new push drops them. Comments are posted with **your own** `gh` login, exactly as if
 you typed them, so Codex only answers if your GitHub account is connected to Codex.
+
+## Approvals
+
+Each reviewer's verdict is about the head commit; a verdict on an older commit does not count.
+
+| Reviewer   | Approved when                                                                                   | Wants changes when                                     |
+| ---------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| CodeRabbit | its last `APPROVED`/`CHANGES_REQUESTED` review is `APPROVED` (a later push with no files to review keeps it) | that review is `CHANGES_REQUESTED`                     |
+| Codex      | 👍 on the PR description given after the head commit, or its "Didn't find any major issues" receipt for the head | it left a review with suggestions on the head          |
+| Teammate   | the last decisive review of someone other than the author is `APPROVED`, or the `approved` label | any teammate's last decisive review requests changes   |
+
+Codex leaves its 👍 in place after new pushes, so a 👍 older than the head commit (or followed by a
+Codex review of another commit) is ignored. Codex's replies in a thread are not reviews.
 
 ## Install
 
@@ -72,7 +87,8 @@ brew install --cask swiftbar   # open it once and choose a plugin folder
 gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folder>
 ```
 
-Each PR has a submenu with the state of CodeRabbit and Codex and the actions that make sense for it:
+Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer and the actions that
+make sense for it:
 **Request AI review**, **Ask for review again**, **Triage comments with Claude Code** (opens a
 terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
 again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of
@@ -86,7 +102,8 @@ Notifications fire when:
 - on someone else's PR you take part in (you review it, were asked to, or commented), the author or
   another teammate approves, requests changes, leaves a general comment, or replies in a thread you
   opened;
-- a PR becomes your turn, Codex finishes on one of your PRs, or a queued request is posted.
+- a PR becomes your turn, Codex approves or finds issues on one of your PRs, one of your PRs gets
+  all three approves, or a queued request is posted.
 
 Bots never trigger them, and neither do comments addressed to a bot (`@codex review`,
 `@coderabbitai ...`). Several events on the same PR within one refresh become one notification.

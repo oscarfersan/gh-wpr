@@ -37,6 +37,9 @@ export function formatClock(iso: string): string {
 	return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** True when a short or full sha names the given commit. */
+export const matchesOid = (oid: string, sha: string): boolean => sha.length >= 7 && oid.toLowerCase().startsWith(sha.toLowerCase());
+
 /**
  * When the current head became reviewable: the later of its commit and the PR
  * leaving draft. Bots skip drafts, so anything they did before that is stale.
