@@ -11,6 +11,8 @@ export type Approval =
 	/** Its last verdict is about an older commit. */
 	| { kind: 'stale'; oid: string | null }
 	/** No verdict yet. */
-	| { kind: 'none' };
+	| { kind: 'none' }
+	/** An optional reviewer nobody asked on this PR (Codex on small PRs). */
+	| { kind: 'not_requested' };
 
-export const isApproved = (a: Approval): boolean => a.kind === 'approved' || a.kind === 'disabled';
+export const isApproved = (a: Approval): boolean => a.kind === 'approved' || a.kind === 'disabled' || a.kind === 'not_requested';

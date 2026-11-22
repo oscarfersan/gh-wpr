@@ -81,6 +81,7 @@ export function missingApprovals(approvals: Approvals): string[] {
 
 const NOTION_REASON: Record<Approval['kind'], string> = {
 	disabled: 'draft',
+	not_requested: 'draft',
 	approved: 'Notion AI approved, mark it ready for review',
 	changes: 'draft · Notion AI asked for changes',
 	stale: 'draft · Notion AI reviewed an older commit',
@@ -109,10 +110,9 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		(coderabbit.kind === 'rate_limited' && !rateLimitOver) ||
 		codex.kind === 'running' ||
 		queued.length > 0;
-	const aiActionable =
-		blockers.length === 0 &&
-		!aiBusy &&
-		(coderabbit.kind === 'needs_unstick' || rateLimitOver || ['never', 'outdated', 'timed_out'].includes(codex.kind));
+	// Codex is optional: asking it the first time is offered, but only owed once it is in play on this PR.
+	const aiOwed = coderabbit.kind === 'needs_unstick' || rateLimitOver || ['outdated', 'timed_out'].includes(codex.kind);
+	const aiActionable = blockers.length === 0 && !aiBusy && (aiOwed || codex.kind === 'never');
 
 	const approvals: Approvals = {
 		coderabbit: coderabbitApproval(pr, config.coderabbit, coderabbit),
@@ -144,7 +144,7 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		if (threadsAwaitingAuthor > 0) return result('author', threadsReason(pendingThreads, config));
 		if (labels.has(config.labels.needsAuthor.toLowerCase())) return result('author', 'changes requested');
 		if (aiBusy) return result('waiting_ai', aiWaitReason(coderabbit, codex, queued));
-		if (aiActionable) return result('author', 'request the AI review');
+		if (aiActionable && aiOwed) return result('author', 'request the AI review');
 		const reviewers = pr.requestedReviewers.filter((r) => r !== me);
 		const waitingFor = missing.flatMap((m) => (m === 'a reviewer' ? (reviewers.length ? reviewers : ['review']) : [`${m}'s approve`]));
 		return result('others', `waiting for ${waitingFor.join(', ')}`);

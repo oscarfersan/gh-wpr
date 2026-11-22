@@ -132,7 +132,10 @@ export function codexState(pr: PullRequest, config: CodexConfig, now: Date): Cod
 	return reviewedOid ? { kind: 'outdated', reviewedOid } : { kind: 'never' };
 }
 
-/** Codex approves with 👍 on the description (or a "Didn't find any major issues" receipt) for the head. */
+/**
+ * Codex approves with 👍 on the description (or a "Didn't find any major issues" receipt) for the head.
+ * It is optional: on a PR where nobody ever asked it, it does not hold the PR back.
+ */
 export function codexApproval(pr: PullRequest, config: CodexConfig, state: CodexState): Approval {
 	if (!config.enabled) return { kind: 'disabled' };
 	const thumbsAt = codexThumbsUp(pr, config);
@@ -153,5 +156,6 @@ export function codexApproval(pr: PullRequest, config: CodexConfig, state: Codex
 	);
 	if (suggestions) return { kind: 'changes', at: suggestions.submittedAt };
 	if (state.kind === 'outdated') return { kind: 'stale', oid: state.reviewedOid };
+	if (state.kind === 'never') return { kind: 'not_requested' };
 	return { kind: 'none' };
 }

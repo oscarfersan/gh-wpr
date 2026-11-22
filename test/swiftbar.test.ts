@@ -10,7 +10,8 @@ import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, cr
 
 const ctx = { plugin: '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0, config };
 
-const mineNeedsCodex = (): Assessment => assess(makePr({ checkRuns: [check()] }), config, 'alice', NOW);
+const mineNeedsCodex = (): Assessment =>
+	assess(makePr({ checkRuns: [check()], comments: [codexSummary(OLD, 'completed', 90)] }), config, 'alice', NOW);
 const reviewForBob = (number = 7): Assessment =>
 	assess(
 		makePr({ number, author: 'bob', checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 3)], requestedReviewers: ['alice'] }),

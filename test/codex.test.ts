@@ -76,7 +76,7 @@ describe('codexApproval', () => {
 	});
 
 	it('ignores 👍 from people', () => {
-		assert.equal(approval(makePr({ reactions: [{ ...codexThumbsUp(10), login: 'bob' }] })).kind, 'none');
+		assert.equal(approval(makePr({ reactions: [{ ...codexThumbsUp(10), login: 'bob' }] })).kind, 'not_requested');
 	});
 
 	it("approves with a \"Didn't find any major issues\" receipt for the head", () => {

@@ -85,7 +85,7 @@ export function codexLine(state: CodexState, queued: boolean, now: Date, approva
 		case 'timed_out':
 			return 'Codex: no answer to the last request';
 		case 'never':
-			return 'Codex: not requested';
+			return 'Codex: not requested (optional)';
 	}
 }
 
@@ -104,6 +104,7 @@ export function humanLine(approval: Approval & { by?: string[] }): string {
 export function notionLine(approval: Approval): string {
 	switch (approval.kind) {
 		case 'disabled':
+		case 'not_requested':
 			return '';
 		case 'approved':
 			return 'Notion AI: approved the last commit';

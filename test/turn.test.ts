@@ -22,10 +22,26 @@ describe('assess', () => {
 		assert.match(a.reason, /conflicts/);
 	});
 
-	it('asks me to request the AI review when Codex has not reviewed my head', () => {
-		const a = assess(makePr({ checkRuns: [check()] }), config, 'alice', NOW);
+	it('asks me to request the AI review when Codex reviewed an older commit', () => {
+		const a = assess(makePr({ checkRuns: [check()], comments: [codexSummary(OLD, 'completed', 90)] }), config, 'alice', NOW);
 		assert.equal(a.group, 'author');
 		assert.ok(a.aiActionable);
+	});
+
+	it('treats Codex as optional on a PR where nobody asked it', () => {
+		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 10, 'APPROVED'), review('bob', HEAD, 5, 'APPROVED')] });
+		const a = assess(pr, config, 'alice', NOW);
+		assert.equal(a.approvals.codex.kind, 'not_requested');
+		assert.ok(a.done);
+		assert.ok(a.aiActionable, 'asking Codex is still offered');
+		const waiting = assess(makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 10, 'APPROVED')], requestedReviewers: ['bob'] }), config, 'alice', NOW);
+		assert.equal(waiting.group, 'others');
+		assert.equal(waiting.reason, 'waiting for bob');
+	});
+
+	it('requires Codex once someone asked it', () => {
+		const pr = makePr({ checkRuns: [check()], comments: [comment('alice', '@codex review', 40)], reviews: [review('coderabbitai', HEAD, 10, 'APPROVED'), review('bob', HEAD, 5, 'APPROVED')] });
+		assert.ok(!assess(pr, config, 'alice', NOW).done);
 	});
 
 	it('shows my PR as waiting for the AI while CodeRabbit reviews', () => {
