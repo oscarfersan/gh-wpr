@@ -79,8 +79,29 @@ gh extension install oscarfersan/gh-wpr
 gh wpr init
 ```
 
-`init` asks which repositories to follow and who is on your team, and writes
-`~/.config/gh-wpr/config.json`. See [`config.example.json`](config.example.json) for every setting.
+`init` asks which repositories to follow, reads the team settings the repositories already have
+(see [Team settings](#team-settings)), asks only for what is still missing, finds your local clones and
+writes `~/.config/gh-wpr/config.json`. Running it again fills in what is missing; `--force` starts over.
+See [`config.example.json`](config.example.json) for every setting.
+
+`gh wpr doctor` checks every feature and says how to fix what is missing:
+
+```text
+✓ GitHub CLI · signed in as alice
+✓ Team settings (acme/api) · from .github/wpr.json in acme/api
+⚠ Claude Code · "claude" was not found, so "Triage comments with Claude Code" is hidden
+    → Install Claude Code, or set "claude.command" to its full path in your config
+```
+
+It exits with 1 when something needs fixing, and `--json` prints the same list for scripts.
+
+### Joining a team that uses gh wpr
+
+```bash
+gh extension install oscarfersan/gh-wpr
+gh wpr init
+gh wpr doctor
+```
 
 Update with `gh extension upgrade wpr`.
 
@@ -96,9 +117,30 @@ gh wpr tick                    Post queued requests that are due
 gh wpr nudge 123               Ask your teammate to review again (see "Asking for a review")
 gh wpr open 123                Open the PR in the browser
 gh wpr claude 123              Start Claude Code in the repo with a prompt about the PR
+gh wpr init                    Set up, or fill in what is missing
+gh wpr doctor                  Check every feature and say how to fix what is missing
 ```
 
 A PR can be given as `123`, `#123`, `owner/repo#123` or its URL.
+
+## Team settings
+
+Settings that are the same for the whole team can be committed to each repository as
+`.github/wpr.json`, so a new teammate does not copy them by hand. See
+[`team.example.json`](team.example.json).
+
+| Team: `.github/wpr.json` in the repo                     | Personal: `~/.config/gh-wpr/config.json`      |
+| -------------------------------------------------------- | --------------------------------------------- |
+| `team`, `ignoreChecks`, `coderabbit`, `codex`, `notion`, `nudge`, `labels` | `repos`, `localPaths`, `notify`, `claude`, `fullRefreshMinutes` |
+
+- `gh wpr` reads the file from the default branch through the GitHub API, so no clone is needed, and
+  fetches it again at most once an hour (`gh wpr doctor` and `gh wpr init` always fetch it).
+- Your own config wins, setting by setting: `"coderabbit": { "stuckAfterMinutes": 60 }` changes that one
+  value and keeps the rest of the team's `coderabbit` settings. A list such as `team` is replaced, not joined.
+- Personal settings are refused in the team file. A team file with a wrong value is ignored, not fatal,
+  and `gh wpr doctor` and the menu say why.
+- When you follow several repos whose files disagree, the first repo in `repos` wins and `doctor`
+  lists the settings that differ.
 
 ## Asking for a review
 
@@ -151,6 +193,10 @@ The first refresh after installing only records the current state. Turn them off
 SwiftBar does not load your shell profile. The plugin adds Homebrew, `~/.local/bin`, Volta, fnm and
 nvm to `PATH`; for anything else, export it in `~/.config/gh-wpr/swiftbar.env`, for example
 `PATH="/my/node/bin:$PATH"` or `GH_WPR_NODE=/my/node/bin/node`.
+
+When something is not set up (a team file with an error, `claude` not found, a missing local clone),
+the menu shows **n features not set up** at the bottom, which opens `gh wpr doctor` in a terminal. Actions
+that cannot work, such as **Triage comments with Claude Code** without Claude Code, are hidden.
 
 Run `gh wpr swiftbar install` again after `gh extension upgrade wpr` to pick up plugin changes.
 

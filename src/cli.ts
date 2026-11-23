@@ -1,11 +1,12 @@
 import { ai } from './commands/ai.ts';
 import { claude } from './commands/claude.ts';
+import { doctor } from './commands/doctor.ts';
 import { init } from './commands/init.ts';
 import { nudge, open } from './commands/nudge.ts';
 import { status } from './commands/status.ts';
 import { swiftbarInstall, swiftbarMenu } from './commands/swiftbar.ts';
 import { tick } from './commands/tick.ts';
-import { ConfigError, loadConfig } from './config.ts';
+import { ConfigError, loadConfigFresh } from './config.ts';
 import { color } from './format.ts';
 import { GhError } from './github.ts';
 import { TargetError } from './target.ts';
@@ -25,6 +26,8 @@ Usage
   gh wpr swiftbar                              Print the SwiftBar menu (used by the plugin)
   gh wpr swiftbar install [--dir <folder>]     Install the SwiftBar plugin
   gh wpr init [--repo owner/name]... [--team a,b] [--ignore-check name]... [--yes] [--force]
+                                               Set up, or fill in what is missing
+  gh wpr doctor [--json]                       Check every feature and say how to fix what is missing
 
 <pr> is a number, #number, owner/repo#number or a PR URL. Use --repo when you follow
 several repositories and the number is ambiguous.
@@ -69,6 +72,7 @@ const KNOWN: Record<string, string[]> = {
 	claude: ['repo'],
 	swiftbar: ['dir'],
 	init: ['repo', 'team', 'ignore-check', 'yes', 'force'],
+	doctor: ['json'],
 };
 
 async function main(argv: string[]): Promise<number> {
@@ -92,6 +96,8 @@ async function main(argv: string[]): Promise<number> {
 		return init({ repos: many('repo'), team: many('team'), ignoreChecks: many('ignore-check'), yes: has('yes'), force: has('force') });
 	}
 
+	if (command === 'doctor') return doctor({ json: has('json') });
+
 	if (command === 'swiftbar') {
 		if (args[0] === 'install') return swiftbarInstall(one('dir'));
 		if (args.length > 0) throw new UsageError('Usage: gh wpr swiftbar [install [--dir <folder>]]');
@@ -99,7 +105,7 @@ async function main(argv: string[]): Promise<number> {
 		return 0;
 	}
 
-	const config = loadConfig();
+	const { config } = await loadConfigFresh();
 	switch (command) {
 		case 'status':
 			await status(config, { json: has('json'), full: has('full'), tick: has('tick') });
