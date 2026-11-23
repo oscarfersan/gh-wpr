@@ -49,7 +49,7 @@ describe('renderMenu', () => {
 
 	it('opens Claude Code in a terminal', () => {
 		const out = renderMenu([mineNeedsCodex()], ctx);
-		assert.match(out, /--Triage comments with Claude Code .*param1="claude".*terminal=true/);
+		assert.match(out, /--Triage comments with Claude Code .*param1="terminal" param2="claude".*terminal=false/);
 	});
 
 	it('does not offer the AI button while CodeRabbit reviews', () => {
