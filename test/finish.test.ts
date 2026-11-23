@@ -8,6 +8,7 @@ import { parseConfig } from '../src/config.ts';
 import { cardUpdate, mentionsPr, schemaProblems, statusForBase } from '../src/finish/notion.ts';
 import type { Schema } from '../src/finish/notion.ts';
 import { decideFinish } from '../src/finish/queue.ts';
+import { finishReadiness, shortSkipped } from '../src/finish/ready.ts';
 import type { FinishEntry } from '../src/finish/queue.ts';
 import { rebaseOntoBase, worktreeDir } from '../src/finish/rebase.ts';
 import { describeCard } from '../src/commands/finish.ts';
@@ -254,5 +255,40 @@ describe('describeCard', () => {
 	});
 	it('says what a dry run would change', () => {
 		assert.match(strip(describeCard({ kind: 'would_update', cards: [card(1), card(2)], status: 'Done (dev)' }, 'x')), /Would update the 2 cards/);
+	});
+});
+
+describe('finishReadiness', () => {
+	const humanOnly = makePr({ checkRuns: [check({ title: 'Finished' })], reviews: [review('bob', HEAD, 5, 'APPROVED')] });
+	const ctx = { plugin: '/tmp/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0, config, finishRepos: ['acme/api'] };
+
+	it('needs only a teammate approval; bots are optional', () => {
+		const a = assess(humanOnly, config, 'alice', NOW);
+		const ready = finishReadiness(a.approvals, false, config);
+		assert.equal(ready.ok, true);
+		assert.deepEqual(ready.ok && ready.skipping, [{ name: 'CodeRabbit', changes: false }]);
+		const out = renderMenu([a], ctx);
+		assert.match(out, /^--Finish without CodeRabbit \| sfimage=checkmark\.seal tooltip="[^"]*CodeRabbit has not approved" .*param1="finish"/m);
+	});
+	it('says when a bot asked for changes', () => {
+		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 10, 'CHANGES_REQUESTED'), review('bob', HEAD, 5, 'APPROVED')] });
+		const ready = finishReadiness(assess(pr, config, 'alice', NOW).approvals, false, config);
+		assert.deepEqual(ready.ok && ready.skipping, [{ name: 'CodeRabbit', changes: true }]);
+		assert.equal(shortSkipped(ready.ok ? ready.skipping : []), 'without CodeRabbit (changes)');
+	});
+	it('is not offered without a teammate approval, on drafts, or when a teammate wants changes', () => {
+		const none = assess(makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 10, 'APPROVED')] }), config, 'alice', NOW);
+		assert.deepEqual(finishReadiness(none.approvals, false, config), { ok: false, why: 'no teammate has approved it yet' });
+		assert.doesNotMatch(renderMenu([none], ctx), /Finish:/);
+		const a = assess(humanOnly, config, 'alice', NOW);
+		assert.equal(finishReadiness(a.approvals, true, config).ok, false);
+		const changes = assess(makePr({ reviews: [review('bob', HEAD, 5, 'CHANGES_REQUESTED')] }), config, 'alice', NOW);
+		assert.match(finishReadiness(changes.approvals, false, config).ok === false ? (finishReadiness(changes.approvals, false, config) as { why: string }).why : '', /bob asked for changes/);
+	});
+	it('waits for the bots too with finish.requireBots', () => {
+		const strict = parseConfig({ repos: ['acme/api'], team: ['alice', 'bob'], finish: { requireBots: true } });
+		const a = assess(humanOnly, strict, 'alice', NOW);
+		assert.equal(finishReadiness(a.approvals, false, strict).ok, false);
+		assert.doesNotMatch(renderMenu([a], { ...ctx, config: strict }), /Finish:/);
 	});
 });

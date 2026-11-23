@@ -12,7 +12,8 @@ import { gh } from '../github.ts';
 import type { Notice } from '../notify.ts';
 import { loadSnapshot } from '../snapshot.ts';
 import { resolveTarget } from '../target.ts';
-import { assess, missingApprovals } from '../turn.ts';
+import { assess } from '../turn.ts';
+import { describeSkipped, finishReadiness } from '../finish/ready.ts';
 import { prKey } from '../types.ts';
 import { short } from '../util.ts';
 
@@ -151,8 +152,8 @@ export async function finish(config: Config, target: string, repo: string | unde
 	}
 	const a = assess(pr, config, fresh.viewer, new Date());
 
-	if (pr.isDraft) throw new FinishError(`${label(pr)} is a draft`);
-	if (!a.done) throw new FinishError(`${label(pr)} still needs approval from ${missingApprovals(a.approvals).join(', ')}`);
+	const ready = finishReadiness(a.approvals, pr.isDraft, config);
+	if (!ready.ok) throw new FinishError(`${label(pr)} cannot be finished: ${ready.why}`);
 	if (!pr.headRef) throw new FinishError(`Could not read the branch of ${label(pr)}; run "gh wpr status --full" and try again`);
 	if (pr.isCrossRepository) throw new FinishError(`${label(pr)} comes from a fork; rebase it there`);
 	const clone = cloneFor(config, pr.repo);
@@ -162,6 +163,7 @@ export async function finish(config: Config, target: string, repo: string | unde
 	}
 
 	console.log(`Finishing ${label(pr)} ${color.dim(`${pr.headRef} → ${pr.baseRef}`)}`);
+	if (ready.skipping.length > 0) console.log(color.yellow(`! Going ahead without the optional reviews: ${describeSkipped(ready.skipping)}`));
 	const rebase = await rebaseOntoBase(clone, { repo: pr.repo, number: pr.number, baseRef: pr.baseRef, headRef: pr.headRef, headOid: pr.headOid }, { dryRun: options.dryRun });
 	let headOid = pr.headOid;
 	let pushed = false;

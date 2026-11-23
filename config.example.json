@@ -42,7 +42,8 @@
 	"finish": {
 		"mergeMethod": "merge",
 		"deleteBranch": true,
-		"waitForCi": true
+		"waitForCi": true,
+		"requireBots": false
 	},
 	"tracker": {
 		"kind": "none",
