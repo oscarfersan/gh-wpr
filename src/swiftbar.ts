@@ -1,4 +1,5 @@
 import type { Approval } from './bots/approval.ts';
+import { describeSkipped, finishReadiness, shortSkipped } from './finish/ready.ts';
 import type { CodeRabbitState } from './bots/coderabbit.ts';
 import type { CodexState } from './bots/codex.ts';
 import { nudgeTargets } from './commands/nudge.ts';
@@ -182,8 +183,13 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	const finishing = ctx.finishing?.some((f) => f.repo === a.pr.repo && f.number === a.pr.number);
 	if (finishing) {
 		lines.push(`--Finishing: merges when CI passes | sfimage=hourglass href=${a.pr.url}/checks`);
-	} else if (a.mine && a.done && !a.pr.isDraft && ctx.finishRepos?.some((r) => r.toLowerCase() === a.pr.repo.toLowerCase())) {
-		lines.push(`--Finish: rebase, merge and update the card | sfimage=checkmark.seal ${action(ctx, ['finish', ref], { terminal: true })}`);
+	} else if (a.mine && ctx.finishRepos?.some((r) => r.toLowerCase() === a.pr.repo.toLowerCase())) {
+		const ready = finishReadiness(a.approvals, a.pr.isDraft, ctx.config);
+		if (ready.ok) {
+			const title = ready.skipping.length > 0 ? `Finish ${shortSkipped(ready.skipping)}` : 'Finish: rebase, merge and update the card';
+			const tooltip = `Rebase, merge when CI passes and update the card${ready.skipping.length ? `. ${describeSkipped(ready.skipping)}` : ''}`;
+			lines.push(`--${menuText(title, 80)} | sfimage=checkmark.seal tooltip=${quote(menuText(tooltip, 160))} ${action(ctx, ['finish', ref], { terminal: true })}`);
+		}
 	}
 	lines.push(`--Open on GitHub | sfimage=safari href=${a.pr.url}`);
 	return lines;

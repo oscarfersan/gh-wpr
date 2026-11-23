@@ -60,6 +60,8 @@ export interface FinishConfig {
 	deleteBranch: boolean;
 	/** Wait for CI on the rebased commit before merging. */
 	waitForCi: boolean;
+	/** Also require CodeRabbit's and Codex's approval. Off: a teammate's approval is enough. */
+	requireBots: boolean;
 }
 
 export type TrackerKind = 'none' | 'notion';
@@ -147,6 +149,7 @@ export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
 		mergeMethod: 'merge',
 		deleteBranch: true,
 		waitForCi: true,
+		requireBots: false,
 	},
 	tracker: {
 		kind: 'none',

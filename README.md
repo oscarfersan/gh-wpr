@@ -147,8 +147,11 @@ Settings that are the same for the whole team can be committed to each repositor
 
 ## Finishing an approved PR
 
-When CodeRabbit, Codex and a teammate have approved the last commit, `gh wpr finish <pr>` (or
-**Finish** in the PR's menu) closes it the same way every time:
+Once a teammate has approved one of your PRs, `gh wpr finish <pr>` (or **Finish** in the PR's menu)
+closes it the same way every time. CodeRabbit's and Codex's reviews are optional: the menu item says
+which of them have not approved (`Finish without CodeRabbit, Codex`), and `finish` goes ahead
+without them. Set `"finish": { "requireBots": true }` to wait for them too. A teammate asking for
+changes, or a draft, always blocks it.
 
 1. **Rebase** the branch onto its base in a temporary worktree of your clone (`localPaths`), so your
    working copy is not touched, and push it with `--force-with-lease`. If someone pushed to the branch
@@ -165,7 +168,7 @@ When CodeRabbit, Codex and a teammate have approved the last commit, `gh wpr fin
    matches, it says so. A queued PR that someone merges on github.com still gets its card updated.
 
 ```json
-"finish": { "mergeMethod": "merge", "deleteBranch": true, "waitForCi": true },
+"finish": { "mergeMethod": "merge", "deleteBranch": true, "waitForCi": true, "requireBots": false },
 "tracker": {
   "kind": "notion",
   "dataSourceId": "<database or data source id>",
