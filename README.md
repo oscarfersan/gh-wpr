@@ -160,9 +160,9 @@ When CodeRabbit, Codex and a teammate have approved the last commit, `gh wpr fin
    bar (or `gh wpr tick`) checks it. A failed CI, a new push or a conflict cancels it, with a notification.
 4. **Merge** with `finish.mergeMethod` (`merge`, `squash` or `rebase`) and delete the branch
    (`finish.deleteBranch`).
-5. **Update the card**, if `tracker` is set: the card whose PR property links to the PR gets the status
-   for the PR's base branch and the merge commit. When no card or several cards match, nothing is changed
-   and it says so. A queued PR that someone merges on github.com still gets its card updated.
+5. **Update the cards**, if `tracker` is set: every card whose PR property links to the PR (one PR can
+   close several cards) gets the status for the PR's base branch and the merge commit. When no card
+   matches, it says so. A queued PR that someone merges on github.com still gets its card updated.
 
 ```json
 "finish": { "mergeMethod": "merge", "deleteBranch": true, "waitForCi": true },

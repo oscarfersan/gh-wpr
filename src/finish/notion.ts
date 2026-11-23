@@ -151,12 +151,14 @@ export function cardUpdate(schema: Schema, tracker: TrackerConfig, status: strin
 }
 
 export type CardResult =
-	| { kind: 'updated'; card: Card; status: string | null }
-	| { kind: 'would_update'; card: Card; status: string | null }
-	| { kind: 'not_found' }
-	| { kind: 'ambiguous'; cards: Card[] };
+	| { kind: 'updated'; cards: Card[]; status: string | null; failed: { card: Card; error: string }[] }
+	| { kind: 'would_update'; cards: Card[]; status: string | null }
+	| { kind: 'not_found' };
 
-/** Finds the PR's card and sets its status and merge commit. More than one match changes nothing. */
+/**
+ * Finds every card that links to the PR (one PR can close several cards) and sets
+ * their status and merge commit. A card that fails does not stop the others.
+ */
 export async function updateCard(
 	tracker: TrackerConfig,
 	pr: { repo: string; number: number; baseRef: string },
@@ -170,9 +172,19 @@ export async function updateCard(
 	if (problems.length > 0) throw new TrackerError(`Notion card settings: ${problems.join('; ')}`);
 	const cards = await findCards(token, schema, tracker, pr.repo, pr.number);
 	if (cards.length === 0) return { kind: 'not_found' };
-	if (cards.length > 1) return { kind: 'ambiguous', cards };
 	const status = statusForBase(tracker.statusByBase, pr.baseRef);
-	if (options.dryRun) return { kind: 'would_update', card: cards[0], status };
-	await call(token, 'PATCH', `/pages/${cards[0].id}`, cardUpdate(schema, tracker, status, commit));
-	return { kind: 'updated', card: cards[0], status };
+	if (options.dryRun) return { kind: 'would_update', cards, status };
+	const update = cardUpdate(schema, tracker, status, commit);
+	const updated: Card[] = [];
+	const failed: { card: Card; error: string }[] = [];
+	for (const card of cards) {
+		try {
+			await call(token, 'PATCH', `/pages/${card.id}`, update);
+			updated.push(card);
+		} catch (error) {
+			failed.push({ card, error: (error as Error).message });
+		}
+	}
+	if (updated.length === 0) throw new TrackerError(failed.map((f) => `${f.card.url}: ${f.error}`).join('; '));
+	return { kind: 'updated', cards: updated, status, failed };
 }

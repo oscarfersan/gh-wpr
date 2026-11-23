@@ -28,16 +28,20 @@ export function cloneFor(config: Config, repo: string): string | null {
 	return existsSync(dir) ? dir : null;
 }
 
-function describeCard(result: CardResult, commit: string): string {
+const cardsWord = (n: number) => (n === 1 ? 'card' : `${n} cards`);
+
+export function describeCard(result: CardResult, commit: string): string {
 	switch (result.kind) {
-		case 'updated':
-			return `${color.green('✓')} Card updated: ${result.status ? `status "${result.status}", ` : 'status unchanged (no "statusByBase" match), '}commit ${short(commit)} → ${result.card.url}`;
+		case 'updated': {
+			const status = result.status ? `status "${result.status}"` : 'status unchanged (no "statusByBase" match)';
+			const done = `${color.green('✓')} Updated the ${cardsWord(result.cards.length)}: ${status}, commit ${short(commit)} → ${result.cards.map((c) => c.url).join(', ')}`;
+			const failed = result.failed.map((f) => `\n${color.red('✗')} Could not update ${f.card.url}: ${f.error}`).join('');
+			return done + failed;
+		}
 		case 'would_update':
-			return `${color.yellow('○')} Would update the card: ${result.status ? `status "${result.status}", ` : 'status unchanged, '}commit → ${result.card.url}`;
+			return `${color.yellow('○')} Would update the ${cardsWord(result.cards.length)}: ${result.status ? `status "${result.status}"` : 'status unchanged'}, merge commit → ${result.cards.map((c) => c.url).join(', ')}`;
 		case 'not_found':
 			return `${color.yellow('!')} No card links to this PR; update it by hand`;
-		case 'ambiguous':
-			return `${color.yellow('!')} ${result.cards.length} cards link to this PR, none was changed: ${result.cards.map((c) => c.url).join(', ')}`;
 	}
 }
 
