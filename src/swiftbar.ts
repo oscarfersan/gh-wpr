@@ -51,9 +51,15 @@ export function menuText(text: string, max = 60): string {
 
 const quote = (value: string): string => `"${value.replace(/"/g, '\\"')}"`;
 
+/**
+ * A menu action that runs `gh wpr <args>` through the plugin. With `terminal` it
+ * opens a Terminal window via `gh wpr terminal`, not SwiftBar's terminal=true,
+ * which needs the macOS Automation permission.
+ */
 function action(ctx: MenuContext, args: string[], options: { terminal?: boolean } = {}): string {
-	const params = args.map((arg, i) => `param${i + 1}=${quote(arg)}`).join(' ');
-	return `bash=${quote(ctx.plugin)} ${params} terminal=${options.terminal ? 'true' : 'false'} refresh=true`;
+	const all = options.terminal ? ['terminal', ...args] : args;
+	const params = all.map((arg, i) => `param${i + 1}=${quote(arg)}`).join(' ');
+	return `bash=${quote(ctx.plugin)} ${params} terminal=false refresh=true`;
 }
 
 export function coderabbitLine(state: CodeRabbitState, now: Date, approval?: Approval): string {

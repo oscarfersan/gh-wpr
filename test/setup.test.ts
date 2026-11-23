@@ -159,7 +159,7 @@ describe('renderMenu setup footer', () => {
 
 	it('shows how many features need setting up and opens doctor', () => {
 		const out = renderMenu([], { ...ctx, setupIssues: 2 });
-		assert.match(out, /^2 features not set up \| sfimage=gearshape .*param1="doctor" terminal=true/m);
+		assert.match(out, /^2 features not set up \| sfimage=gearshape .*param1="terminal" param2="doctor" terminal=false/m);
 	});
 	it('shows nothing when everything is set up', () => {
 		assert.doesNotMatch(renderMenu([], { ...ctx, setupIssues: 0 }), /not set up/);

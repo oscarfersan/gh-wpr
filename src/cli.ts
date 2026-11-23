@@ -7,6 +7,7 @@ import { nudge, open } from './commands/nudge.ts';
 import { status } from './commands/status.ts';
 import { swiftbarInstall, swiftbarMenu } from './commands/swiftbar.ts';
 import { tick } from './commands/tick.ts';
+import { openInTerminal } from './commands/terminal.ts';
 import { ConfigError, loadConfigFresh } from './config.ts';
 import { color } from './format.ts';
 import { GhError } from './github.ts';
@@ -81,6 +82,8 @@ const KNOWN: Record<string, string[]> = {
 };
 
 async function main(argv: string[]): Promise<number> {
+	// Used by the menu bar: everything after it is a gh wpr command to run in a new Terminal window.
+	if (argv[0] === 'terminal') return openInTerminal(argv.slice(1));
 	const { positional, flags } = parseArgs(argv);
 	const has = (name: string) => flags.has(name);
 	const one = (name: string) => flags.get(name)?.at(-1);

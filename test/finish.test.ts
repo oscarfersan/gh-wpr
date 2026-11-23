@@ -12,6 +12,7 @@ import { finishReadiness, shortSkipped } from '../src/finish/ready.ts';
 import type { FinishEntry } from '../src/finish/queue.ts';
 import { rebaseOntoBase, worktreeDir } from '../src/finish/rebase.ts';
 import { describeCard } from '../src/commands/finish.ts';
+import { terminalScript } from '../src/commands/terminal.ts';
 import { renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
 import { HEAD, NOW, check, config, makePr, minutesAgo, review } from './fixtures.ts';
@@ -133,7 +134,7 @@ describe('renderMenu Finish', () => {
 
 	it('offers Finish on my approved PR when the repo has a clone', () => {
 		assert.ok(done.done);
-		assert.match(renderMenu([done], { ...ctx, finishRepos: ['acme/api'] }), /Finish: rebase, merge and update the card .*param1="finish" .*terminal=true/);
+		assert.match(renderMenu([done], { ...ctx, finishRepos: ['acme/api'] }), /Finish: rebase, merge and update the card .*param1="terminal" param2="finish" .*terminal=false/);
 		assert.doesNotMatch(renderMenu([done], ctx), /Finish:/);
 	});
 	it('says it is finishing while queued', () => {
@@ -268,7 +269,7 @@ describe('finishReadiness', () => {
 		assert.equal(ready.ok, true);
 		assert.deepEqual(ready.ok && ready.skipping, [{ name: 'CodeRabbit', changes: false }]);
 		const out = renderMenu([a], ctx);
-		assert.match(out, /^--Finish without CodeRabbit \| sfimage=checkmark\.seal tooltip="[^"]*CodeRabbit has not approved" .*param1="finish"/m);
+		assert.match(out, /^--Finish without CodeRabbit \| sfimage=checkmark\.seal tooltip="[^"]*CodeRabbit has not approved" .*param1="terminal" param2="finish"/m);
 	});
 	it('says when a bot asked for changes', () => {
 		const pr = makePr({ checkRuns: [check()], reviews: [review('coderabbitai', HEAD, 10, 'CHANGES_REQUESTED'), review('bob', HEAD, 5, 'APPROVED')] });
@@ -290,5 +291,18 @@ describe('finishReadiness', () => {
 		const a = assess(humanOnly, strict, 'alice', NOW);
 		assert.equal(finishReadiness(a.approvals, false, strict).ok, false);
 		assert.doesNotMatch(renderMenu([a], { ...ctx, config: strict }), /Finish:/);
+	});
+});
+
+describe('terminalScript', () => {
+	it('runs through the plugin, quotes paths and keeps the window open', () => {
+		const script = terminalScript(['finish', 'https://github.com/acme/api/pull/42'], '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', '/tmp/run/x.command');
+		assert.match(script, /^#!\/bin\/bash\n/);
+		assert.match(script, /\n'\/Users\/me\/Library\/Application Support\/SwiftBar\/wpr\.1m\.sh' finish https:\/\/github\.com\/acme\/api\/pull\/42\n/);
+		assert.match(script, /rm -f \/tmp\/run\/x\.command/);
+		assert.match(script, /read -n 1/);
+	});
+	it('falls back to gh wpr and escapes single quotes', () => {
+		assert.match(terminalScript(['claude', "it's"], undefined, '/tmp/x.command'), /\ngh wpr claude 'it'\\''s'\n/);
 	});
 });
