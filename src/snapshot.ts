@@ -17,7 +17,7 @@ import { minutesSince, normLogin } from './util.ts';
  */
 
 const PR_FIELDS = `
-	number title url state isDraft mergeable updatedAt headRefOid baseRefName
+	number title url state isDraft mergeable updatedAt headRefOid baseRefName headRefName isCrossRepository
 	author { login }
 	repository { nameWithOwner }
 	labels(first: 30) { nodes { name } }
@@ -83,6 +83,8 @@ interface RawPr {
 	updatedAt: string;
 	headRefOid: string;
 	baseRefName: string;
+	headRefName?: string;
+	isCrossRepository?: boolean;
 	author: Login;
 	repository: { nameWithOwner: string };
 	labels: { nodes: { name: string }[] };
@@ -153,6 +155,8 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 		mergeable: raw.mergeable,
 		updatedAt: raw.updatedAt,
 		baseRef: raw.baseRefName,
+		headRef: raw.headRefName,
+		isCrossRepository: raw.isCrossRepository,
 		headOid: head?.oid ?? raw.headRefOid,
 		headCommittedAt: head?.committedDate ?? raw.updatedAt,
 		checkRuns: (head?.statusCheckRollup?.contexts.nodes ?? [])

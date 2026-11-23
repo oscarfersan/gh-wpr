@@ -6,6 +6,25 @@ import { localChecks, setupIssues } from '../doctor.ts';
 import { color } from '../format.ts';
 import { gh } from '../github.ts';
 import { normLogin } from '../util.ts';
+import { notionToken, readSchema, schemaProblems } from '../finish/notion.ts';
+import type { TrackerConfig } from '../config.ts';
+
+async function trackerCheck(token: string, tracker: TrackerConfig): Promise<Check> {
+	try {
+		const schema = await readSchema(token, tracker.dataSourceId);
+		const problems = schemaProblems(schema, tracker);
+		return problems.length === 0
+			? { feature: 'Tracker card', state: 'ok', detail: `Notion: ${Object.entries(tracker.statusByBase).map(([b, s]) => `${b} → ${s}`).join(', ')}` }
+			: { feature: 'Tracker card', state: 'error', detail: problems.join('; '), fix: 'Fix "tracker" in .github/wpr.json' };
+	} catch (error) {
+		return {
+			feature: 'Tracker card',
+			state: 'error',
+			detail: (error as Error).message,
+			fix: 'Check "tracker.dataSourceId", that your token has not expired, and (for an integration secret) that the database is shared with it (••• → Connections)',
+		};
+	}
+}
 import { PLUGIN_NAME, swiftbarPluginDir } from './swiftbar.ts';
 
 const MARK: Record<Check['state'], string> = {
@@ -78,7 +97,9 @@ export async function runChecks(): Promise<Check[]> {
 		checks.push({ feature: 'Team', state: 'ok', detail: config.team.join(', ') });
 	}
 
-	checks.push(...localChecks(loaded));
+	const token = config.tracker.kind === 'none' ? null : await notionToken();
+	checks.push(...localChecks(loaded, { trackerToken: config.tracker.kind === 'none' ? undefined : token !== null }));
+	if (token) checks.push(await trackerCheck(token, config.tracker));
 	checks.push(await swiftbarCheck());
 	return checks;
 }

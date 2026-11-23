@@ -13,6 +13,9 @@ import { loadSnapshot } from '../snapshot.ts';
 import { renderError, renderMenu } from '../swiftbar.ts';
 import { assessAll } from '../turn.ts';
 import { runQueue } from './tick.ts';
+import { cloneFor, runFinishQueue } from './finish.ts';
+import { readFinishQueue } from '../finish/queue.ts';
+import { notionToken } from '../finish/notion.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -38,6 +41,7 @@ export async function swiftbarMenu(): Promise<void> {
 		const loaded = await loadConfigFresh();
 		const { config } = loaded;
 		const now = new Date();
+		const finished = readFinishQueue().length > 0 ? await runFinishQueue(config, { dryRun: false }) : { lines: [], notices: [] };
 		let snapshot = await loadSnapshot(config);
 		const tick = await runQueue(config, snapshot, { dryRun: false });
 		if (tick.posted > 0) snapshot = await loadSnapshot(config);
@@ -46,14 +50,29 @@ export async function swiftbarMenu(): Promise<void> {
 
 		if (config.notify) {
 			const memory = readMemory();
-			for (const notice of [...postedNotices(tick.postedEntries, items), ...notices(memory, items, snapshot.viewer, config)]) await sendNotice(notice);
+			for (const notice of [...finished.notices, ...postedNotices(tick.postedEntries, items), ...notices(memory, items, snapshot.viewer, config)]) await sendNotice(notice);
 		}
 		writeMemory(remember(items, snapshot.viewer, config));
 
 		const plugin = process.env.GH_WPR_PLUGIN ?? process.env.SWIFTBAR_PLUGIN_PATH ?? PLUGIN_SOURCE;
-		const setup = setupIssues(localChecks(loaded));
+		const trackerToken = config.tracker.kind === 'none' ? undefined : (await notionToken()) !== null;
+		const setup = setupIssues(localChecks(loaded, { trackerToken }));
 		const claudeAvailable = onPath(config.claude.command);
-		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines, config, setupIssues: setup, claudeAvailable }));
+		const finishRepos = config.repos.filter((r) => cloneFor(config, r));
+		process.stdout.write(
+			renderMenu(items, {
+				plugin,
+				now,
+				viewer: snapshot.viewer,
+				queued: queue.length,
+				tickLines: [...finished.lines, ...tick.lines],
+				config,
+				setupIssues: setup,
+				claudeAvailable,
+				finishing: readFinishQueue(),
+				finishRepos,
+			}),
+		);
 	} catch (error) {
 		process.stdout.write(renderError(error instanceof Error ? error.message : String(error)));
 	}

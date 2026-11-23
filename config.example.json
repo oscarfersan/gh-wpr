@@ -38,5 +38,18 @@
 		"needsReview": "needs-review",
 		"needsAuthor": "needs-author-action",
 		"approved": "approved"
+	},
+	"finish": {
+		"mergeMethod": "merge",
+		"deleteBranch": true,
+		"waitForCi": true
+	},
+	"tracker": {
+		"kind": "none",
+		"dataSourceId": "",
+		"prProperty": "PR",
+		"statusProperty": "Status",
+		"commitProperty": "Merge commit",
+		"statusByBase": {}
 	}
 }

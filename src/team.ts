@@ -10,7 +10,7 @@ import { stateDir } from './paths.ts';
 export const TEAM_FILE = '.github/wpr.json';
 
 /** Settings that are the same for the whole team and may be committed. */
-export const TEAM_KEYS = ['team', 'ignoreChecks', 'coderabbit', 'codex', 'notion', 'nudge', 'labels'] as const;
+export const TEAM_KEYS = ['team', 'ignoreChecks', 'coderabbit', 'codex', 'notion', 'nudge', 'labels', 'finish', 'tracker'] as const;
 
 /** Settings that belong to one person (paths, preferences, secrets) and never go in the team file. */
 export const PERSONAL_KEYS = ['repos', 'localPaths', 'notify', 'claude', 'fullRefreshMinutes'] as const;

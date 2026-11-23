@@ -1,6 +1,7 @@
 import { ai } from './commands/ai.ts';
 import { claude } from './commands/claude.ts';
 import { doctor } from './commands/doctor.ts';
+import { auth, finish, FinishError } from './commands/finish.ts';
 import { init } from './commands/init.ts';
 import { nudge, open } from './commands/nudge.ts';
 import { status } from './commands/status.ts';
@@ -23,6 +24,8 @@ Usage
   gh wpr nudge <pr> [--dry-run]                Ask your teammate to review again ("nudge.mode" in the config)
   gh wpr open <pr>                             Open the PR in the browser
   gh wpr claude <pr>                           Start Claude Code in the repo with a prompt about the PR
+  gh wpr finish <pr> [--dry-run] [--claude]    Rebase an approved PR, merge it when CI passes, update its card
+  gh wpr auth notion                           Store your Notion token in the keychain
   gh wpr swiftbar                              Print the SwiftBar menu (used by the plugin)
   gh wpr swiftbar install [--dir <folder>]     Install the SwiftBar plugin
   gh wpr init [--repo owner/name]... [--team a,b] [--ignore-check name]... [--yes] [--force]
@@ -73,6 +76,8 @@ const KNOWN: Record<string, string[]> = {
 	swiftbar: ['dir'],
 	init: ['repo', 'team', 'ignore-check', 'yes', 'force'],
 	doctor: ['json'],
+	finish: ['repo', 'dry-run', 'claude'],
+	auth: [],
 };
 
 async function main(argv: string[]): Promise<number> {
@@ -97,6 +102,7 @@ async function main(argv: string[]): Promise<number> {
 	}
 
 	if (command === 'doctor') return doctor({ json: has('json') });
+	if (command === 'auth') return auth(args[0]);
 
 	if (command === 'swiftbar') {
 		if (args[0] === 'install') return swiftbarInstall(one('dir'));
@@ -134,6 +140,9 @@ async function main(argv: string[]): Promise<number> {
 			if (!args[0]) throw new UsageError('Which PR? Usage: gh wpr open <pr>');
 			await open(config, args[0], one('repo'));
 			return 0;
+		case 'finish':
+			if (!args[0]) throw new UsageError('Which PR? Usage: gh wpr finish <pr>');
+			return finish(config, args[0], one('repo'), { dryRun: has('dry-run'), claude: has('claude') });
 		case 'claude':
 			if (!args[0]) throw new UsageError('Which PR? Usage: gh wpr claude <pr>');
 			return claude(config, args[0], one('repo'));
@@ -146,7 +155,7 @@ main(process.argv.slice(2)).then(
 		process.exitCode = code;
 	},
 	(error: unknown) => {
-		const expected = [UsageError, ConfigError, GhError, TargetError].some((E) => error instanceof E);
+		const expected = [UsageError, ConfigError, GhError, TargetError, FinishError].some((E) => error instanceof E);
 		const message = error instanceof Error ? error.message : String(error);
 		console.error(`${color.red('error')} ${message}`);
 		if (!expected && error instanceof Error && process.env.GH_WPR_DEBUG) console.error(error.stack);

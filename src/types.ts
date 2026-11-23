@@ -67,6 +67,10 @@ export interface PullRequest {
 	updatedAt: string;
 	/** Branch the PR merges into. */
 	baseRef: string;
+	/** Branch the PR merges from. Missing in caches from older versions. */
+	headRef?: string;
+	/** The head branch lives in a fork. */
+	isCrossRepository?: boolean;
 	headOid: string;
 	headCommittedAt: string;
 	/**

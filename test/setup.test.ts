@@ -143,7 +143,8 @@ describe('localChecks', () => {
 		const checks = localChecks(loaded, { path: '' });
 		assert.equal(checks.find((c) => c.feature.startsWith('Team settings'))?.state, 'error');
 		assert.equal(checks.find((c) => c.feature === 'Claude Code')?.state, 'warn');
-		assert.equal(setupIssues(checks), 2);
+		assert.equal(checks.find((c) => c.feature === 'Finish PR')?.state, 'warn');
+		assert.equal(setupIssues(checks), 3);
 	});
 	it('treats a repo without team file as optional', () => {
 		const absent: TeamFile = { repo: 'acme/api', status: 'absent', fetchedAt: NOW.toISOString() };

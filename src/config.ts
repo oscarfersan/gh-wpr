@@ -51,6 +51,34 @@ export interface LabelsConfig {
 	approved: string;
 }
 
+export type MergeMethod = 'merge' | 'squash' | 'rebase';
+
+export interface FinishConfig {
+	/** How "gh wpr finish" merges once CI passes. */
+	mergeMethod: MergeMethod;
+	/** Delete the PR's branch on GitHub after the merge (never for forks). */
+	deleteBranch: boolean;
+	/** Wait for CI on the rebased commit before merging. */
+	waitForCi: boolean;
+}
+
+export type TrackerKind = 'none' | 'notion';
+
+export interface TrackerConfig {
+	/** Where the PR's card lives. "none" skips the card update. */
+	kind: TrackerKind;
+	/** Notion data source (or database) holding the cards. */
+	dataSourceId: string;
+	/** Property that holds the PR's URL; the card is found by it. */
+	prProperty: string;
+	/** Status (or select) property set after the merge. */
+	statusProperty: string;
+	/** Text or URL property that gets the merge commit. */
+	commitProperty: string;
+	/** Status to set, by the PR's base branch. Keys may use * ("hotfix/*"). */
+	statusByBase: Record<string, string>;
+}
+
 export interface ClaudeConfig {
 	/** Command that starts Claude Code; extra arguments are allowed ("claude --model opus"). */
 	command: string;
@@ -75,6 +103,8 @@ export interface Config {
 	notion: NotionConfig;
 	nudge: NudgeConfig;
 	labels: LabelsConfig;
+	finish: FinishConfig;
+	tracker: TrackerConfig;
 }
 
 export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
@@ -112,6 +142,19 @@ export const DEFAULTS: Omit<Config, 'repos' | 'team' | 'localPaths'> = {
 		needsReview: 'needs-review',
 		needsAuthor: 'needs-author-action',
 		approved: 'approved',
+	},
+	finish: {
+		mergeMethod: 'merge',
+		deleteBranch: true,
+		waitForCi: true,
+	},
+	tracker: {
+		kind: 'none',
+		dataSourceId: '',
+		prProperty: 'PR',
+		statusProperty: 'Status',
+		commitProperty: 'Merge commit',
+		statusByBase: {},
 	},
 };
 
@@ -156,6 +199,25 @@ function parseNudge(raw: unknown): NudgeConfig {
 	return nudge;
 }
 
+const MERGE_METHODS: MergeMethod[] = ['merge', 'squash', 'rebase'];
+const TRACKER_KINDS: TrackerKind[] = ['none', 'notion'];
+
+function parseFinish(raw: unknown): FinishConfig {
+	const finish = merge(DEFAULTS.finish, raw, 'finish');
+	if (!MERGE_METHODS.includes(finish.mergeMethod)) throw new ConfigError(`"finish.mergeMethod" must be one of ${MERGE_METHODS.join(', ')}`);
+	return finish;
+}
+
+function parseTracker(raw: unknown): TrackerConfig {
+	const tracker = merge(DEFAULTS.tracker, raw, 'tracker');
+	if (!TRACKER_KINDS.includes(tracker.kind)) throw new ConfigError(`"tracker.kind" must be one of ${TRACKER_KINDS.join(', ')}`);
+	if (!isObject(tracker.statusByBase) || Object.values(tracker.statusByBase).some((v) => typeof v !== 'string')) {
+		throw new ConfigError('"tracker.statusByBase" must map branch names to status names');
+	}
+	if (tracker.kind === 'notion' && !tracker.dataSourceId) throw new ConfigError('"tracker.dataSourceId" is needed when "tracker.kind" is "notion"');
+	return tracker;
+}
+
 export function parseConfig(raw: unknown): Config {
 	if (!isObject(raw)) throw new ConfigError('The config must be a JSON object');
 	const repos = stringList(raw.repos, 'repos');
@@ -196,6 +258,8 @@ export function parseConfig(raw: unknown): Config {
 		notion: merge(DEFAULTS.notion, raw.notion, 'notion'),
 		nudge: parseNudge(raw.nudge),
 		labels: merge(DEFAULTS.labels, raw.labels, 'labels'),
+		finish: parseFinish(raw.finish),
+		tracker: parseTracker(raw.tracker),
 	};
 }
 
