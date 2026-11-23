@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { configFile } from './paths.ts';
+import { combineTeamFiles, layer, readTeamFile, refreshTeamFiles } from './team.ts';
+import type { TeamFile } from './team.ts';
 import { normLogin } from './util.ts';
 
 export interface CodeRabbitConfig {
@@ -197,7 +199,26 @@ export function parseConfig(raw: unknown): Config {
 	};
 }
 
-export function loadConfig(path: string = configFile()): Config {
+export interface TeamSource {
+	repo: string;
+	status: TeamFile['status'];
+	/** Why the file was ignored: bad JSON, a personal key, a wrong value. */
+	error?: string;
+	fetchError?: string;
+	/** Never fetched yet (no network so far, or a repo just added). */
+	missing?: boolean;
+}
+
+export interface LoadedConfig {
+	config: Config;
+	path: string;
+	/** One entry per followed repo, in order. */
+	teamFiles: TeamSource[];
+	/** Team settings that followed repos set to different values; the first repo wins. */
+	conflicts: string[];
+}
+
+function readPersonal(path: string): Record<string, unknown> {
 	if (!existsSync(path)) {
 		throw new ConfigError(`No config at ${path}. Run "gh wpr init" to create one.`);
 	}
@@ -208,8 +229,58 @@ export function loadConfig(path: string = configFile()): Config {
 		throw new ConfigError(`${path} is not valid JSON: ${(error as Error).message}`);
 	}
 	try {
-		return parseConfig(raw);
+		parseConfig(raw);
 	} catch (error) {
 		throw new ConfigError(`${path}: ${(error as Error).message}`);
 	}
+	return raw as Record<string, unknown>;
+}
+
+/**
+ * Builds the config from the personal settings on top of the team files of the
+ * followed repos. A team file with a wrong value is left out instead of breaking
+ * everyone's menu; `teamFiles` says why.
+ */
+export function buildConfig(personal: Record<string, unknown>, files: (TeamFile | null)[], repos: string[]): Omit<LoadedConfig, 'path'> {
+	const sources: TeamSource[] = [];
+	const usable: TeamFile[] = [];
+	repos.forEach((repo, i) => {
+		const file = files[i];
+		if (!file) {
+			sources.push({ repo, status: 'absent', missing: true });
+			return;
+		}
+		const source: TeamSource = { repo, status: file.status, error: file.error, fetchError: file.fetchError };
+		if (file.status === 'found' && file.settings) {
+			try {
+				parseConfig({ ...file.settings, repos: [repo] });
+				usable.push(file);
+			} catch (error) {
+				source.status = 'invalid';
+				source.error = (error as Error).message;
+			}
+		}
+		sources.push(source);
+	});
+	const team = combineTeamFiles(usable);
+	return { config: parseConfig(layer(team.settings, personal)), teamFiles: sources, conflicts: team.conflicts };
+}
+
+/** Reads the config using the team files already fetched; no network. */
+export function loadConfigDetails(path: string = configFile()): LoadedConfig {
+	const personal = readPersonal(path);
+	const repos = personal.repos as string[];
+	return { path, ...buildConfig(personal, repos.map(readTeamFile), repos) };
+}
+
+export function loadConfig(path: string = configFile()): Config {
+	return loadConfigDetails(path).config;
+}
+
+/** Same, after fetching team files that are older than an hour (all of them with `force`). */
+export async function loadConfigFresh(options: { force?: boolean; path?: string } = {}): Promise<LoadedConfig> {
+	const path = options.path ?? configFile();
+	const personal = readPersonal(path);
+	await refreshTeamFiles(personal.repos as string[], { force: options.force });
+	return loadConfigDetails(path);
 }

@@ -23,6 +23,10 @@ export interface MenuContext {
 	queued: number;
 	tickLines?: string[];
 	config: Config;
+	/** Features that need setting up; shown in the footer and opened with `gh wpr doctor`. */
+	setupIssues?: number;
+	/** `claude.command` can be run; when it cannot, the Claude Code action is hidden. */
+	claudeAvailable?: boolean;
 }
 
 const GROUP_ICON: Record<Group, string> = {
@@ -168,7 +172,7 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 		const who = nudgeTargets(a.pr, ctx.config, ctx.viewer);
 		if (who.length > 0) lines.push(`--${menuText(`Ask ${who.join(', ')} to review`, 60)} | sfimage=bell ${action(ctx, ['nudge', ref])}`);
 	}
-	if (a.mine && (a.group === 'author' || a.threadsAwaitingAuthor > 0)) {
+	if (a.mine && ctx.claudeAvailable !== false && (a.group === 'author' || a.threadsAwaitingAuthor > 0)) {
 		lines.push(`--Triage comments with Claude Code | sfimage=terminal ${action(ctx, ['claude', ref], { terminal: true })}`);
 	}
 	lines.push(`--Open on GitHub | sfimage=safari href=${a.pr.url}`);
@@ -197,6 +201,10 @@ export function renderMenu(items: Assessment[], ctx: MenuContext): string {
 	}
 	if (ctx.queued > 0) out.push(`${ctx.queued} request${ctx.queued > 1 ? 's' : ''} queued | sfimage=tray.full size=12`);
 	for (const line of ctx.tickLines ?? []) out.push(`${menuText(line.replace(/\x1b\[[0-9;]*m/g, ''), 90)} | size=11`);
+	const setup = ctx.setupIssues ?? 0;
+	if (setup > 0) {
+		out.push(`${setup} feature${setup > 1 ? 's' : ''} not set up | sfimage=gearshape ${action(ctx, ['doctor'], { terminal: true })}`);
+	}
 	out.push(`Refresh | sfimage=arrow.clockwise refresh=true`);
 	out.push(`Signed in as ${ctx.viewer} · ${formatClock(ctx.now.toISOString())} | size=11 color=#8a8f98`);
 	return `${out.join('\n')}\n`;
@@ -224,7 +232,7 @@ export function renderError(message: string): string {
 		'---',
 		...wrap(message).map((l) => `${menuText(l, 200)} | size=12`),
 		'---',
-		'Fix it in a terminal, then refresh | size=11 color=#8a8f98',
+		'Fix it in a terminal (gh wpr doctor shows what is missing), then refresh | size=11 color=#8a8f98',
 		'Refresh | refresh=true',
 		'',
 	].join('\n');

@@ -1,0 +1,22 @@
+{
+	"team": ["alice", "bob", "carol"],
+	"ignoreChecks": ["Some flaky workflow"],
+	"coderabbit": {
+		"stuckAfterMinutes": 30
+	},
+	"codex": {
+		"enabled": true
+	},
+	"notion": {
+		"enabled": false
+	},
+	"nudge": {
+		"mode": "comment",
+		"comment": "{mentions} review"
+	},
+	"labels": {
+		"needsReview": "needs-review",
+		"needsAuthor": "needs-author-action",
+		"approved": "approved"
+	}
+}

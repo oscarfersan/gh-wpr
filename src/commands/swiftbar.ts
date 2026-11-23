@@ -3,7 +3,8 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { loadConfig } from '../config.ts';
+import { loadConfigFresh } from '../config.ts';
+import { localChecks, onPath, setupIssues } from '../doctor.ts';
 import { color } from '../format.ts';
 import { notices, postedNotices, readMemory, remember, writeMemory } from '../notify.ts';
 import type { Notice } from '../notify.ts';
@@ -15,7 +16,7 @@ import { runQueue } from './tick.ts';
 
 const execFileAsync = promisify(execFile);
 
-const PLUGIN_NAME = 'wpr.1m.sh';
+export const PLUGIN_NAME = 'wpr.1m.sh';
 const PLUGIN_SOURCE = resolve(dirname(fileURLToPath(import.meta.url)), '../../swiftbar', PLUGIN_NAME);
 
 async function sendNotice(notice: Notice): Promise<void> {
@@ -34,7 +35,8 @@ async function sendNotice(notice: Notice): Promise<void> {
 /** Prints the menu for SwiftBar. Never throws: errors become a warning icon in the menu bar. */
 export async function swiftbarMenu(): Promise<void> {
 	try {
-		const config = loadConfig();
+		const loaded = await loadConfigFresh();
+		const { config } = loaded;
 		const now = new Date();
 		let snapshot = await loadSnapshot(config);
 		const tick = await runQueue(config, snapshot, { dryRun: false });
@@ -49,13 +51,15 @@ export async function swiftbarMenu(): Promise<void> {
 		writeMemory(remember(items, snapshot.viewer, config));
 
 		const plugin = process.env.GH_WPR_PLUGIN ?? process.env.SWIFTBAR_PLUGIN_PATH ?? PLUGIN_SOURCE;
-		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines, config }));
+		const setup = setupIssues(localChecks(loaded));
+		const claudeAvailable = onPath(config.claude.command);
+		process.stdout.write(renderMenu(items, { plugin, now, viewer: snapshot.viewer, queued: queue.length, tickLines: tick.lines, config, setupIssues: setup, claudeAvailable }));
 	} catch (error) {
 		process.stdout.write(renderError(error instanceof Error ? error.message : String(error)));
 	}
 }
 
-async function swiftbarPluginDir(): Promise<string | null> {
+export async function swiftbarPluginDir(): Promise<string | null> {
 	try {
 		const { stdout } = await execFileAsync('defaults', ['read', 'com.ameba.SwiftBar', 'PluginDirectory']);
 		return stdout.trim() || null;
