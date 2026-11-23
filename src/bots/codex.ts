@@ -1,6 +1,6 @@
 import type { CodexConfig } from '../config.ts';
 import type { PullRequest } from '../types.ts';
-import { isAfter, latestBy, matchesOid, minutesSince } from '../util.ts';
+import { addMs, isAfter, isHeadChanges, latestBy, minutesSince, sameOid } from '../util.ts';
 import type { Approval } from './approval.ts';
 
 /*
@@ -9,6 +9,9 @@ import type { Approval } from './approval.ts';
  * status. When it finds nothing it puts 👍 on the PR description and may leave
  * a receipt comment ("Didn't find any major issues", "**Reviewed commit:**
  * `abc1234`") instead of a PR review with suggestions.
+ *
+ * A verdict on a commit the branch was only rebased from (`pr.sameChangesAs`)
+ * counts as a verdict on the head.
  */
 
 export type CodexState =
@@ -38,8 +41,8 @@ export function isCodexRequest(body: string, command: string): boolean {
 	return body.trim().toLowerCase().startsWith(command.toLowerCase());
 }
 
-/** Latest evidence that Codex looked at a commit other than the head, if any. */
-function olderReview(pr: PullRequest, config: CodexConfig): { oid: string; at: string } | null {
+/** Every commit Codex says it reviewed, with when it said so. */
+function reviewedCommits(pr: PullRequest, config: CodexConfig): { oid: string; at: string }[] {
 	const found: { oid: string; at: string }[] = [];
 	for (const comment of pr.comments.filter((c) => c.author === config.login)) {
 		const state = comment.body.match(STATE_RE);
@@ -58,22 +61,50 @@ function olderReview(pr: PullRequest, config: CodexConfig): { oid: string; at: s
 	for (const review of codexReviews(pr, config).filter((r) => r.commitOid)) {
 		found.push({ oid: review.commitOid as string, at: review.submittedAt });
 	}
-	return latestBy(
-		found.filter((f) => !matchesOid(pr.headOid, f.oid)),
+	return found;
+}
+
+/** Latest evidence that Codex looked at a commit with other changes than the head, if any. */
+const olderReview = (pr: PullRequest, config: CodexConfig): { oid: string; at: string } | null =>
+	latestBy(
+		reviewedCommits(pr, config).filter((f) => !isHeadChanges(pr, f.oid)),
 		(f) => f.at,
 	);
+
+/**
+ * Commits other than the head that Codex reviewed, newest first. If the branch was only
+ * rebased since, its verdict on them still holds (see `PullRequest.sameChangesAs`).
+ */
+export function codexReviewedOids(pr: PullRequest, config: CodexConfig): string[] {
+	const out: string[] = [];
+	const found = reviewedCommits(pr, config).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+	for (const { oid } of found) {
+		if (!sameOid(pr.headOid, oid) && !out.some((o) => sameOid(o, oid))) out.push(oid);
+	}
+	return out;
 }
+
+/** Codex reacts a few seconds after it updates its summary and receipt. */
+const THUMBS_SLACK_MS = 5 * 60_000;
 
 /**
  * Codex's 👍 on the PR description, when it is about the head commit: given
- * after that commit, and not followed by a review of another commit.
+ * after that commit (or right after reviewing a commit the head was rebased
+ * from), and not followed by a review of other changes.
  */
 export function codexThumbsUp(pr: PullRequest, config: CodexConfig): string | null {
 	const thumbs = latestBy(
 		pr.reactions.filter((r) => r.login === config.login && r.content === 'THUMBS_UP'),
 		(r) => r.at,
 	);
-	if (!thumbs || isAfter(pr.headCommittedAt, thumbs.at)) return null;
+	if (!thumbs) return null;
+	if (isAfter(pr.headCommittedAt, thumbs.at)) {
+		const before = latestBy(
+			reviewedCommits(pr, config).filter((f) => !isAfter(f.at, addMs(thumbs.at, THUMBS_SLACK_MS))),
+			(f) => f.at,
+		);
+		if (!before || !isHeadChanges(pr, before.oid)) return null;
+	}
 	const older = olderReview(pr, config);
 	if (older && isAfter(older.at, thumbs.at)) return null;
 	return thumbs.at;
@@ -85,7 +116,7 @@ export function codexState(pr: PullRequest, config: CodexConfig, now: Date): Cod
 	const comments = pr.comments.filter((c) => c.author === config.login);
 	const reviews = codexReviews(pr, config);
 
-	if (reviews.some((r) => r.commitOid === pr.headOid)) return { kind: 'reviewed' };
+	if (reviews.some((r) => r.commitOid && isHeadChanges(pr, r.commitOid))) return { kind: 'reviewed' };
 
 	let reviewedOid: string | null = null;
 	for (const comment of [...comments].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))) {
@@ -99,7 +130,7 @@ export function codexState(pr: PullRequest, config: CodexConfig, now: Date): Cod
 			}
 			const sha = parsed.code_review?.commit_sha;
 			const status = parsed.code_review?.status;
-			if (sha && matchesOid(pr.headOid, sha)) {
+			if (sha && isHeadChanges(pr, sha)) {
 				if (status === 'completed') return { kind: 'reviewed' };
 				if (status && minutesSince(comment.updatedAt, now) <= config.timeoutMinutes * 2) {
 					return { kind: 'running', since: comment.updatedAt };
@@ -108,7 +139,7 @@ export function codexState(pr: PullRequest, config: CodexConfig, now: Date): Cod
 			if (sha && status === 'completed' && !reviewedOid) reviewedOid = sha;
 		}
 		const receipt = comment.body.match(RECEIPT_RE);
-		if (receipt && matchesOid(pr.headOid, receipt[1])) return { kind: 'reviewed' };
+		if (receipt && isHeadChanges(pr, receipt[1])) return { kind: 'reviewed' };
 		if (receipt && !reviewedOid) reviewedOid = receipt[1];
 	}
 
@@ -144,14 +175,14 @@ export function codexApproval(pr: PullRequest, config: CodexConfig, state: Codex
 		pr.comments.filter((c) => {
 			if (c.author !== config.login || !NO_ISSUES_RE.test(c.body)) return false;
 			const receipt = c.body.match(RECEIPT_RE);
-			return receipt !== null && matchesOid(pr.headOid, receipt[1]);
+			return receipt !== null && isHeadChanges(pr, receipt[1]);
 		}),
 		(c) => c.updatedAt,
 	);
 	if (noIssues) return { kind: 'approved', at: noIssues.updatedAt };
 	// Suggestions come as a PR review on the head. Without one the verdict is still on its way.
 	const suggestions = latestBy(
-		codexReviews(pr, config).filter((r) => r.commitOid === pr.headOid),
+		codexReviews(pr, config).filter((r) => r.commitOid !== null && isHeadChanges(pr, r.commitOid)),
 		(r) => r.submittedAt,
 	);
 	if (suggestions) return { kind: 'changes', at: suggestions.submittedAt };

@@ -1,8 +1,10 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Config } from './config.ts';
+import { codexReviewedOids } from './bots/codex.ts';
 import { graphql } from './github.ts';
 import { stateDir } from './paths.ts';
+import { sameChangesAs } from './rebase.ts';
 import type { CheckRun, Mergeable, PullRequest } from './types.ts';
 import { prKey } from './types.ts';
 import { minutesSince, normLogin } from './util.ts';
@@ -15,7 +17,7 @@ import { minutesSince, normLogin } from './util.ts';
  */
 
 const PR_FIELDS = `
-	number title url state isDraft mergeable updatedAt headRefOid
+	number title url state isDraft mergeable updatedAt headRefOid baseRefName
 	author { login }
 	repository { nameWithOwner }
 	labels(first: 30) { nodes { name } }
@@ -80,6 +82,7 @@ interface RawPr {
 	mergeable: Mergeable;
 	updatedAt: string;
 	headRefOid: string;
+	baseRefName: string;
 	author: Login;
 	repository: { nameWithOwner: string };
 	labels: { nodes: { name: string }[] };
@@ -149,6 +152,7 @@ export function mapPullRequest(raw: RawPr): PullRequest {
 		),
 		mergeable: raw.mergeable,
 		updatedAt: raw.updatedAt,
+		baseRef: raw.baseRefName,
 		headOid: head?.oid ?? raw.headRefOid,
 		headCommittedAt: head?.committedDate ?? raw.updatedAt,
 		checkRuns: (head?.statusCheckRollup?.contexts.nodes ?? [])
@@ -218,9 +222,11 @@ async function fetchDetails(targets: { repo: string; number: number }[]): Promis
 }
 
 interface Cache {
-	version: 5;
+	version: 6;
 	fullAt: string | null;
 	prs: Record<string, PullRequest>;
+	/** Whether an older commit has the same PR diff as a head (`sameChangesKey`). Answers never change. */
+	sameChanges: Record<string, boolean>;
 }
 
 const cacheFile = (): string => join(stateDir(), 'snapshot.json');
@@ -228,11 +234,11 @@ const cacheFile = (): string => join(stateDir(), 'snapshot.json');
 function readCache(): Cache {
 	try {
 		const parsed = JSON.parse(readFileSync(cacheFile(), 'utf8')) as Cache;
-		if (parsed.version === 5) return parsed;
+		if (parsed.version === 6) return parsed;
 	} catch {
 		// Missing or corrupt cache: start over.
 	}
-	return { version: 5, fullAt: null, prs: {} };
+	return { version: 6, fullAt: null, prs: {}, sameChanges: {} };
 }
 
 function writeCache(cache: Cache): void {
@@ -282,10 +288,18 @@ export async function loadSnapshot(config: Config, options: SnapshotOptions = {}
 	});
 
 	const fetched = await fetchDetails(stale.map((p) => ({ repo: p.repository.nameWithOwner, number: p.number })));
+	const sameChanges = cache.sameChanges ?? {};
+	if (config.codex.enabled) {
+		await Promise.all(
+			fetched.map(async (pr) => {
+				pr.sameChangesAs = await sameChangesAs(pr, codexReviewedOids(pr, config.codex).slice(0, 3), sameChanges);
+			}),
+		);
+	}
 	const byKey = new Map(fetched.map((pr) => [prKey(pr), pr]));
 
 	const prs: PullRequest[] = [];
-	const next: Cache = { version: 5, fullAt: full ? now.toISOString() : cache.fullAt, prs: {} };
+	const next: Cache = { version: 6, fullAt: full ? now.toISOString() : cache.fullAt, prs: {}, sameChanges: {} };
 	for (const p of light) {
 		const key = prKey({ repo: p.repository.nameWithOwner, number: p.number });
 		const refetched = stale.some((s) => s.repository.nameWithOwner === p.repository.nameWithOwner && s.number === p.number);
@@ -294,6 +308,9 @@ export async function loadSnapshot(config: Config, options: SnapshotOptions = {}
 		prs.push(pr);
 		next.prs[key] = pr;
 	}
+	// Keep only the answers about current heads, so the cache does not grow forever.
+	const heads = new Set(prs.map((pr) => pr.headOid));
+	for (const [k, v] of Object.entries(sameChanges)) if (heads.has(k.split('..').pop() ?? '')) next.sameChanges[k] = v;
 	writeCache(next);
 
 	return { viewer, fetchedAt: now.toISOString(), prs };

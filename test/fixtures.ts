@@ -29,6 +29,7 @@ export function makePr(overrides: Partial<PullRequest> = {}): PullRequest {
 		reactions: [],
 		mergeable: 'MERGEABLE',
 		updatedAt: minutesAgo(1),
+		baseRef: 'main',
 		headOid: HEAD,
 		headCommittedAt: minutesAgo(60),
 		checkRuns: [],

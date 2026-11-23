@@ -45,6 +45,10 @@ Each reviewer's verdict is about the head commit; a verdict on an older commit d
 Codex leaves its 👍 in place after new pushes, so a 👍 older than the head commit (or followed by a
 Codex review of another commit) is ignored. Codex's replies in a thread are not reviews.
 
+A rebase keeps Codex's verdict: when the PR diff of the commit Codex reviewed adds and removes the
+same lines as the head's (compared on GitHub, ignoring context lines and line numbers), its 👍,
+receipt or suggestions count for the head, and `gh wpr ai` does not ask it again.
+
 Codex is optional: on a small PR you may not ask it at all. Until someone asks it on a PR (a
 `@codex review` comment or a Codex review), it shows as *not requested* and does not hold the PR
 back, and the PR is not your turn because of it. **Request AI review** still offers it.

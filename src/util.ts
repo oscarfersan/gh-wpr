@@ -40,6 +40,13 @@ export function formatClock(iso: string): string {
 /** True when a short or full sha names the given commit. */
 export const matchesOid = (oid: string, sha: string): boolean => sha.length >= 7 && oid.toLowerCase().startsWith(sha.toLowerCase());
 
+/** True when two shas, short or full, name the same commit. */
+export const sameOid = (a: string, b: string): boolean => (a.length >= b.length ? matchesOid(a, b) : matchesOid(b, a));
+
+/** True when a sha names the head, or a commit with the same changes that the branch was rebased from. */
+export const isHeadChanges = (pr: { headOid: string; sameChangesAs?: string[] }, sha: string): boolean =>
+	matchesOid(pr.headOid, sha) || (pr.sameChangesAs ?? []).some((oid) => sameOid(oid, sha));
+
 /**
  * When the current head became reviewable: the later of its commit and the PR
  * leaving draft. Bots skip drafts, so anything they did before that is stale.

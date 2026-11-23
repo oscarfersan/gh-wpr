@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { codexApproval, codexState } from '../src/bots/codex.ts';
+import { codexApproval, codexReviewedOids, codexState } from '../src/bots/codex.ts';
 import { HEAD, NOW, OLD, codexSummary, codexThumbsUp, comment, config, makePr, minutesAgo, review } from './fixtures.ts';
 
 const state = (pr = makePr()) => codexState(pr, config.codex, NOW);
@@ -87,5 +87,52 @@ describe('codexApproval', () => {
 	it('reports changes when it reviewed the head with suggestions', () => {
 		const pr = makePr({ reviews: [review('chatgpt-codex-connector', HEAD, 5, 'COMMENTED', '### 💡 Codex Review')] });
 		assert.equal(approval(pr).kind, 'changes');
+	});
+
+	describe('after a rebase that kept the same changes', () => {
+		const receipt = comment('chatgpt-codex-connector', "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `bbbbbbb222`", 30);
+		// Codex approved OLD 30 minutes ago; the branch was rebased onto a newer base 10 minutes ago.
+		const rebased = (overrides = {}) =>
+			makePr({
+				headCommittedAt: minutesAgo(10),
+				comments: [codexSummary(OLD, 'completed', 30), receipt],
+				reactions: [codexThumbsUp(30)],
+				sameChangesAs: [OLD],
+				...overrides,
+			});
+
+		it('keeps the approval', () => {
+			assert.deepEqual(state(rebased()), { kind: 'reviewed' });
+			assert.equal(approval(rebased()).kind, 'approved');
+		});
+
+		it('keeps a 👍 without a receipt', () => {
+			const pr = rebased({ comments: [codexSummary(OLD, 'completed', 30)] });
+			assert.equal(approval(pr).kind, 'approved');
+		});
+
+		it('is stale when the changes differ', () => {
+			assert.equal(approval(rebased({ sameChangesAs: [] })).kind, 'stale');
+		});
+
+		it('keeps suggestions on the rebased-from commit', () => {
+			const pr = rebased({ comments: [], reactions: [], reviews: [review('chatgpt-codex-connector', OLD, 30, 'COMMENTED', '### 💡 Codex Review')] });
+			assert.equal(approval(pr).kind, 'changes');
+		});
+	});
+});
+
+describe('codexReviewedOids', () => {
+	it('lists the other commits Codex reviewed, newest first, once each', () => {
+		const third = 'ccccccc3333333333333333333333333333333333';
+		const pr = makePr({
+			comments: [
+				codexSummary(OLD, 'completed', 30),
+				comment('chatgpt-codex-connector', "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `bbbbbbb222`", 31),
+				codexSummary(HEAD, 'completed', 5),
+			],
+			reviews: [review('chatgpt-codex-connector', third, 90, 'COMMENTED', '### 💡 Codex Review')],
+		});
+		assert.deepEqual(codexReviewedOids(pr, config.codex), [OLD, third]);
 	});
 });

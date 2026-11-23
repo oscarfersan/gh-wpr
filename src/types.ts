@@ -65,8 +65,15 @@ export interface PullRequest {
 	reactions: Reaction[];
 	mergeable: Mergeable;
 	updatedAt: string;
+	/** Branch the PR merges into. */
+	baseRef: string;
 	headOid: string;
 	headCommittedAt: string;
+	/**
+	 * Older commits a bot reviewed whose PR diff is the same as the head's: the branch was only
+	 * rebased since. Their verdicts still hold. Missing in caches from older versions.
+	 */
+	sameChangesAs?: string[];
 	checkRuns: CheckRun[];
 	labels: string[];
 	requestedReviewers: string[];
