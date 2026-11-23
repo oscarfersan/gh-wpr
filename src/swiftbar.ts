@@ -27,6 +27,10 @@ export interface MenuContext {
 	setupIssues?: number;
 	/** `claude.command` can be run; when it cannot, the Claude Code action is hidden. */
 	claudeAvailable?: boolean;
+	/** PRs being finished (rebased and waiting for CI before the merge). */
+	finishing?: { repo: string; number: number }[];
+	/** Repos with a local clone, where "Finish" can rebase. */
+	finishRepos?: string[];
 }
 
 const GROUP_ICON: Record<Group, string> = {
@@ -174,6 +178,12 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 	}
 	if (a.mine && ctx.claudeAvailable !== false && (a.group === 'author' || a.threadsAwaitingAuthor > 0)) {
 		lines.push(`--Triage comments with Claude Code | sfimage=terminal ${action(ctx, ['claude', ref], { terminal: true })}`);
+	}
+	const finishing = ctx.finishing?.some((f) => f.repo === a.pr.repo && f.number === a.pr.number);
+	if (finishing) {
+		lines.push(`--Finishing: merges when CI passes | sfimage=hourglass href=${a.pr.url}/checks`);
+	} else if (a.mine && a.done && !a.pr.isDraft && ctx.finishRepos?.some((r) => r.toLowerCase() === a.pr.repo.toLowerCase())) {
+		lines.push(`--Finish: rebase, merge and update the card | sfimage=checkmark.seal ${action(ctx, ['finish', ref], { terminal: true })}`);
 	}
 	lines.push(`--Open on GitHub | sfimage=safari href=${a.pr.url}`);
 	return lines;

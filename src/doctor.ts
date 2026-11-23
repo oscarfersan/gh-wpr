@@ -35,7 +35,7 @@ export function onPath(commandLine: string, path = process.env.PATH ?? ''): bool
 }
 
 /** Checks that need no network, cheap enough for every menu refresh. */
-export function localChecks(loaded: Omit<LoadedConfig, 'path'>, options: { path?: string } = {}): Check[] {
+export function localChecks(loaded: Omit<LoadedConfig, 'path'>, options: { path?: string; trackerToken?: boolean } = {}): Check[] {
 	const { config } = loaded;
 	const checks: Check[] = [];
 
@@ -86,6 +86,18 @@ export function localChecks(loaded: Omit<LoadedConfig, 'path'>, options: { path?
 		checks.push({ feature: 'Claude Code', state: 'warn', detail: `${detail}; it would start in the wrong folder`, fix: 'Run "gh wpr init" to find your clones' });
 	} else {
 		checks.push({ feature: 'Claude Code', state: 'ok' });
+	}
+
+	if (missingPaths.length > 0 || wrongPaths.length > 0) {
+		const detail = [...wrongPaths, ...(missingPaths.length ? [`no local folder for ${missingPaths.join(', ')}`] : [])].join('; ');
+		checks.push({ feature: 'Finish PR', state: 'warn', detail: `${detail}, so "Finish" is hidden there`, fix: 'Run "gh wpr init" to find your clones' });
+	} else {
+		checks.push({ feature: 'Finish PR', state: 'ok', detail: `${config.finish.mergeMethod}${config.finish.waitForCi ? ' after CI' : ''}` });
+	}
+	if (config.tracker.kind === 'none') {
+		checks.push({ feature: 'Tracker card', state: 'off', detail: 'no "tracker" set, so "Finish" does not update a card' });
+	} else if (options.trackerToken === false) {
+		checks.push({ feature: 'Tracker card', state: 'warn', detail: 'no Notion token, so "Finish" stops before merging', fix: 'Run "gh wpr auth notion"' });
 	}
 	return checks;
 }

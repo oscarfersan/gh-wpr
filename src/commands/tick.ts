@@ -1,5 +1,7 @@
 import type { Config } from '../config.ts';
 import { color } from '../format.ts';
+import { readFinishQueue } from '../finish/queue.ts';
+import { runFinishQueue } from './finish.ts';
 import { postComment } from '../github.ts';
 import { decideEntry, decideQueue, readQueue, writeQueue } from '../queue.ts';
 import type { QueueEntry } from '../queue.ts';
@@ -63,6 +65,9 @@ export async function runQueue(config: Config, snapshot: Snapshot, options: { dr
 }
 
 export async function tick(config: Config, options: { dryRun: boolean; quiet: boolean }): Promise<void> {
+	if (readFinishQueue().length > 0) {
+		for (const line of (await runFinishQueue(config, options)).lines) console.log(line);
+	}
 	if (readQueue().length === 0) {
 		if (!options.quiet) console.log(color.dim('Queue is empty.'));
 		return;

@@ -18,5 +18,21 @@
 		"needsReview": "needs-review",
 		"needsAuthor": "needs-author-action",
 		"approved": "approved"
+	},
+	"finish": {
+		"mergeMethod": "merge",
+		"deleteBranch": true,
+		"waitForCi": true
+	},
+	"tracker": {
+		"kind": "notion",
+		"dataSourceId": "<database or data source id>",
+		"prProperty": "PR",
+		"statusProperty": "Status",
+		"commitProperty": "Merge commit",
+		"statusByBase": {
+			"develop": "Done (dev)",
+			"hotfix/*": "Done (hotfix)"
+		}
 	}
 }

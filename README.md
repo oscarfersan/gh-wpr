@@ -117,6 +117,9 @@ gh wpr tick                    Post queued requests that are due
 gh wpr nudge 123               Ask your teammate to review again (see "Asking for a review")
 gh wpr open 123                Open the PR in the browser
 gh wpr claude 123              Start Claude Code in the repo with a prompt about the PR
+gh wpr finish 123              Rebase an approved PR, merge it when CI passes, update its card
+gh wpr finish 123 --dry-run    Show what it would do
+gh wpr auth notion             Store your Notion token in the keychain
 gh wpr init                    Set up, or fill in what is missing
 gh wpr doctor                  Check every feature and say how to fix what is missing
 ```
@@ -131,7 +134,7 @@ Settings that are the same for the whole team can be committed to each repositor
 
 | Team: `.github/wpr.json` in the repo                     | Personal: `~/.config/gh-wpr/config.json`      |
 | -------------------------------------------------------- | --------------------------------------------- |
-| `team`, `ignoreChecks`, `coderabbit`, `codex`, `notion`, `nudge`, `labels` | `repos`, `localPaths`, `notify`, `claude`, `fullRefreshMinutes` |
+| `team`, `ignoreChecks`, `coderabbit`, `codex`, `notion`, `nudge`, `labels`, `finish`, `tracker` | `repos`, `localPaths`, `notify`, `claude`, `fullRefreshMinutes` |
 
 - `gh wpr` reads the file from the default branch through the GitHub API, so no clone is needed, and
   fetches it again at most once an hour (`gh wpr doctor` and `gh wpr init` always fetch it).
@@ -141,6 +144,51 @@ Settings that are the same for the whole team can be committed to each repositor
   and `gh wpr doctor` and the menu say why.
 - When you follow several repos whose files disagree, the first repo in `repos` wins and `doctor`
   lists the settings that differ.
+
+## Finishing an approved PR
+
+When CodeRabbit, Codex and a teammate have approved the last commit, `gh wpr finish <pr>` (or
+**Finish** in the PR's menu) closes it the same way every time:
+
+1. **Rebase** the branch onto its base in a temporary worktree of your clone (`localPaths`), so your
+   working copy is not touched, and push it with `--force-with-lease`. If someone pushed to the branch
+   after the approvals, nothing is pushed. If the branch is already on top of its base, nothing is pushed.
+2. **On conflicts** it stops and keeps the worktree with the rebase in progress, and nothing is pushed.
+   Resolve them there and run `git rebase --continue`, or let Claude Code do it with
+   `gh wpr finish <pr> --claude`. Then run `gh wpr finish <pr>` again to push.
+3. **Wait for CI** on the new commit. The PR is queued on your machine, and every refresh of the menu
+   bar (or `gh wpr tick`) checks it. A failed CI, a new push or a conflict cancels it, with a notification.
+4. **Merge** with `finish.mergeMethod` (`merge`, `squash` or `rebase`) and delete the branch
+   (`finish.deleteBranch`).
+5. **Update the card**, if `tracker` is set: the card whose PR property links to the PR gets the status
+   for the PR's base branch and the merge commit. When no card or several cards match, nothing is changed
+   and it says so. A queued PR that someone merges on github.com still gets its card updated.
+
+```json
+"finish": { "mergeMethod": "merge", "deleteBranch": true, "waitForCi": true },
+"tracker": {
+  "kind": "notion",
+  "dataSourceId": "<database or data source id>",
+  "prProperty": "PR",
+  "statusProperty": "Status",
+  "commitProperty": "Merge commit",
+  "statusByBase": { "develop": "Done (dev)", "hotfix/*": "Done (hotfix)" }
+}
+```
+
+`finish` and `tracker` are team settings, so they usually go in `.github/wpr.json`. The Notion token is
+personal and never goes in a file:
+
+1. Create a token. Either:
+   - a **personal access token** (notion.so/developers/tokens, with the "Notion API" capability). It acts
+     as you, so it sees what you see and needs no sharing. It expires (1 year at most), and your workspace
+     plan or admins decide who may create one; or
+   - an **internal integration secret** (notion.so/profile/integrations). Share the database with it
+     (••• → Connections).
+2. Run `gh wpr auth notion` to store it in the macOS keychain, or set `GH_WPR_NOTION_TOKEN`.
+
+`gh wpr doctor` checks that the properties exist, have a usable type (PR: URL or text; status: status or
+select; commit: text or URL) and that every status in `statusByBase` is an option.
 
 ## Asking for a review
 
