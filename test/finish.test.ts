@@ -10,6 +10,7 @@ import type { Schema } from '../src/finish/notion.ts';
 import { decideFinish } from '../src/finish/queue.ts';
 import type { FinishEntry } from '../src/finish/queue.ts';
 import { rebaseOntoBase, worktreeDir } from '../src/finish/rebase.ts';
+import { describeCard } from '../src/commands/finish.ts';
 import { renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
 import { HEAD, NOW, check, config, makePr, minutesAgo, review } from './fixtures.ts';
@@ -235,5 +236,23 @@ describe('rebaseOntoBase', () => {
 		const done = await rebaseOntoBase(clone, target, { dryRun: false });
 		assert.equal(done.kind, 'pushed');
 		execFileSync('git', ['-C', origin, 'merge-base', '--is-ancestor', 'develop', 'feature/clash']);
+	});
+});
+
+describe('describeCard', () => {
+	const card = (n: number) => ({ id: `id-${n}`, url: `https://www.notion.so/card-${n}` });
+	const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+	it('lists every card that was updated', () => {
+		const out = strip(describeCard({ kind: 'updated', cards: [card(1), card(2)], status: 'Done (dev)', failed: [] }, 'abcdef1234'));
+		assert.match(out, /Updated the 2 cards: status "Done \(dev\)", commit abcdef1 → .*card-1, .*card-2/);
+	});
+	it('reports the cards that failed next to the ones that worked', () => {
+		const out = strip(describeCard({ kind: 'updated', cards: [card(1)], status: null, failed: [{ card: card(2), error: 'Notion 403: forbidden' }] }, 'abcdef1234'));
+		assert.match(out, /Updated the card: status unchanged/);
+		assert.match(out, /Could not update .*card-2: Notion 403/);
+	});
+	it('says what a dry run would change', () => {
+		assert.match(strip(describeCard({ kind: 'would_update', cards: [card(1), card(2)], status: 'Done (dev)' }, 'x')), /Would update the 2 cards/);
 	});
 });
