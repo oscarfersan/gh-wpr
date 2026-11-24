@@ -7,7 +7,7 @@ import { notices, postedNotices, remember, snippet } from '../src/notify.ts';
 import { menuText, renderError, renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
 import type { Assessment } from '../src/turn.ts';
-import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, crRunning, makePr, minutesAgo, review, thread as makeThread } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread as makeThread } from './fixtures.ts';
 
 const ctx = { plugin: '/Users/me/Library/Application Support/SwiftBar/wpr.1m.sh', now: NOW, viewer: 'alice', queued: 0, config };
 
@@ -137,6 +137,12 @@ describe('review buttons', () => {
 		const out = renderMenu([assess(pr, config, 'alice', NOW)], ctx);
 		assert.ok(out.includes('--Request AI review |'));
 		assert.match(out, /--Ask CodeRabbit to review again .*param2="https:\/\/github.com\/acme\/api\/pull\/42" param3="--bot" param4="coderabbit" param5="--force"/);
+	});
+
+	it('offers scheduling the retry and asking CodeRabbit now while it is rate limited', () => {
+		const out = renderMenu([assess(makePr({ checkRuns: [crRateLimited(2)] }), config, 'alice', NOW)], ctx);
+		assert.ok(out.includes('--Request AI review |'));
+		assert.match(out, /--Ask CodeRabbit now, ignoring the rate limit .*param3="--bot" param4="coderabbit" param5="--force"/);
 	});
 
 	it('does not offer asking CodeRabbit again once it approved the head', () => {

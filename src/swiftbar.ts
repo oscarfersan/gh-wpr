@@ -170,6 +170,10 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 		lines.push(`--Ask CodeRabbit to review again | sfimage=arrow.counterclockwise ${action(ctx, ['ai', ref, '--bot', 'coderabbit', '--force'])}`);
 	}
 	const blocked = a.pr.isDraft || a.pr.mergeable === 'CONFLICTING';
+	// Usage-based billing or a freed slot can let CodeRabbit review before the notice says.
+	if (a.coderabbit.kind === 'rate_limited' && Date.parse(a.coderabbit.retryAt) > ctx.now.getTime() && !blocked) {
+		lines.push(`--Ask CodeRabbit now, ignoring the rate limit | sfimage=arrow.counterclockwise ${action(ctx, ['ai', ref, '--bot', 'coderabbit', '--force'])}`);
+	}
 	if (!a.aiActionable && !a.aiBusy && !blocked) {
 		// Both bots are done with this commit. Asking again is deliberate, so it sits one level deeper.
 		lines.push('--Request AI review again | sfimage=arrow.counterclockwise');

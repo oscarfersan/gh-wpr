@@ -28,6 +28,11 @@ describe('planAi', () => {
 		assert.deepEqual(kinds(plan), ['coderabbit:schedule', 'codex:enqueue']);
 	});
 
+	it('posts the full review at once when forced during a rate limit', () => {
+		const pr = makePr({ checkRuns: [crRateLimited(2)], comments: [rateLimitNotice('**8 minutes**', 2)] });
+		assert.deepEqual(kinds(planAi(pr, config, NOW, { force: true, only: 'coderabbit' })), ['coderabbit:post']);
+	});
+
 	it('posts the full review at once when the rate limit is already over', () => {
 		const pr = makePr({ checkRuns: [crRateLimited(30)], comments: [rateLimitNotice('**17 seconds**', 30)] });
 		assert.deepEqual(kinds(planAi(pr, config, NOW)), ['coderabbit:post', 'codex:enqueue']);

@@ -5,6 +5,7 @@ import { isOpen } from '../src/snapshot.ts';
 import { parseConfig } from '../src/config.ts';
 import { parseTarget } from '../src/target.ts';
 import { assess } from '../src/turn.ts';
+import type { QueueEntry } from '../src/queue.ts';
 import { HEAD, NOW, OLD, check, codexSummary, codexThumbsUp, comment, config, crRateLimited, crRunning, makePr, minutesAgo, review, thread } from './fixtures.ts';
 
 const reviewedByBots = { checkRuns: [check()], comments: [codexSummary(HEAD, 'completed', 5)] };
@@ -51,10 +52,20 @@ describe('assess', () => {
 	it('stops waiting once the rate limit is over', () => {
 		const limited = (minutes: number) =>
 			makePr({ checkRuns: [crRateLimited(minutes)], comments: [codexSummary(HEAD, 'completed', 5)] });
-		assert.equal(assess(limited(2), config, 'alice', NOW).group, 'waiting_ai');
+		const retry: QueueEntry = { repo: 'acme/api', number: 42, bot: 'coderabbit', body: '@coderabbitai full review', headOid: HEAD, notBefore: null, createdAt: minutesAgo(1) };
+		assert.equal(assess(limited(2), config, 'alice', NOW, [retry]).group, 'waiting_ai');
 		const over = assess(limited(30), config, 'alice', NOW);
 		assert.equal(over.group, 'author');
 		assert.ok(over.aiActionable);
+	});
+
+	it('leaves a rate-limited review to me while no retry is queued', () => {
+		const pr = makePr({ checkRuns: [crRateLimited(2)], comments: [codexSummary(HEAD, 'completed', 5)] });
+		const mine = assess(pr, config, 'alice', NOW);
+		assert.equal(mine.group, 'author');
+		assert.match(mine.reason, /rate limited until .*schedule the retry/);
+		assert.ok(mine.aiActionable);
+		assert.equal(assess(pr, config, 'bob', NOW).group, 'waiting_ai');
 	});
 
 	it('gives the turn to the requested reviewer', () => {

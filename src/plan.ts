@@ -52,6 +52,7 @@ function planCodeRabbit(state: CodeRabbitState, config: Config, pr: PullRequest,
 			return force ? post('forced') : skip(`full review requested ${formatAgo(state.at, now)} ago, waiting`);
 		case 'rate_limited':
 			if (Date.parse(state.retryAt) <= now.getTime()) return post('rate limit is over');
+			if (force) return post(`forced, although rate limited until ${formatClock(state.retryAt)}`);
 			return {
 				kind: 'schedule',
 				bot: 'coderabbit',

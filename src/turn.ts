@@ -10,7 +10,7 @@ import type { CiState } from './ci.ts';
 import type { Config } from './config.ts';
 import type { QueueEntry } from './queue.ts';
 import type { PullRequest, ReviewThread } from './types.ts';
-import { latestBy } from './util.ts';
+import { formatClock, latestBy } from './util.ts';
 
 export type Group = 'author' | 'review' | 'waiting_ai' | 'ready' | 'draft' | 'others';
 
@@ -104,14 +104,18 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 	if (ci === 'failure') blockers.push('CI failing');
 
 	const rateLimitOver = coderabbit.kind === 'rate_limited' && Date.parse(coderabbit.retryAt) <= now.getTime();
+	// On my PRs the queue says whether the retry is really scheduled. Without an entry nothing will
+	// ask CodeRabbit again, so the retry is still mine to request.
+	const crRetryPending =
+		coderabbit.kind === 'rate_limited' && !rateLimitOver && (!mine || queued.some((e) => e.bot === 'coderabbit'));
 	const aiBusy =
 		coderabbit.kind === 'reviewing' ||
 		coderabbit.kind === 'requested' ||
-		(coderabbit.kind === 'rate_limited' && !rateLimitOver) ||
+		crRetryPending ||
 		codex.kind === 'running' ||
 		queued.length > 0;
 	// Codex is optional: asking it the first time is offered, but only owed once it is in play on this PR.
-	const aiOwed = coderabbit.kind === 'needs_unstick' || rateLimitOver || ['outdated', 'timed_out'].includes(codex.kind);
+	const aiOwed = coderabbit.kind === 'needs_unstick' || coderabbit.kind === 'rate_limited' ||['outdated', 'timed_out'].includes(codex.kind);
 	const aiActionable = blockers.length === 0 && !aiBusy && (aiOwed || codex.kind === 'never');
 
 	const approvals: Approvals = {
@@ -144,7 +148,12 @@ export function assess(pr: PullRequest, config: Config, me: string, now: Date, q
 		if (threadsAwaitingAuthor > 0) return result('author', threadsReason(pendingThreads, config));
 		if (labels.has(config.labels.needsAuthor.toLowerCase())) return result('author', 'changes requested');
 		if (aiBusy) return result('waiting_ai', aiWaitReason(coderabbit, codex, queued));
-		if (aiActionable && aiOwed) return result('author', 'request the AI review');
+		if (aiActionable && aiOwed) {
+			if (coderabbit.kind === 'rate_limited' && !rateLimitOver) {
+				return result('author', `CodeRabbit rate limited until ${formatClock(coderabbit.retryAt)}, schedule the retry`);
+			}
+			return result('author', 'request the AI review');
+		}
 		const reviewers = pr.requestedReviewers.filter((r) => r !== me);
 		const waitingFor = missing.flatMap((m) => (m === 'a reviewer' ? (reviewers.length ? reviewers : ['review']) : [`${m}'s approve`]));
 		return result('others', `waiting for ${waitingFor.join(', ')}`);
