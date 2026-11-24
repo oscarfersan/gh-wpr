@@ -41,7 +41,7 @@ describe('renderMenu', () => {
 		const out = renderMenu([mineNeedsCodex()], ctx);
 		assert.ok(
 			out.includes(
-				`--Request AI review | sfimage=sparkles bash="${ctx.plugin}" param1="ai" param2="https://github.com/acme/api/pull/42" terminal=false refresh=true`,
+				`--Request Codex review | sfimage=sparkles bash="${ctx.plugin}" param1="ai" param2="https://github.com/acme/api/pull/42" param3="--bot" param4="codex" terminal=false refresh=true`,
 			),
 		);
 		assert.ok(out.includes('param1="ai" param2="--mine"'));
@@ -135,8 +135,23 @@ describe('review buttons', () => {
 	it('offers asking CodeRabbit again when it reviewed the head without approving, even with Codex pending', () => {
 		const pr = makePr({ checkRuns: [check()], comments: [codexSummary(OLD, 'completed', 90)], reviews: [review('coderabbitai', OLD, 95, 'APPROVED')] });
 		const out = renderMenu([assess(pr, config, 'alice', NOW)], ctx);
-		assert.ok(out.includes('--Request AI review |'));
+		assert.ok(out.includes('--Request Codex review |'));
 		assert.match(out, /--Ask CodeRabbit to review again .*param2="https:\/\/github.com\/acme\/api\/pull\/42" param3="--bot" param4="coderabbit" param5="--force"/);
+	});
+
+	it('lets me pick CodeRabbit, Codex or both when both are pending', () => {
+		const out = renderMenu([assess(makePr({ checkRuns: [crRateLimited(2)] }), config, 'alice', NOW)], ctx);
+		assert.ok(out.includes('--Request AI review | sfimage=sparkles\n'));
+		assert.match(out, /----CodeRabbit, then Codex \| .*param2="https:\/\/github.com\/acme\/api\/pull\/42" terminal/);
+		assert.match(out, /----Only CodeRabbit \(full review\) \| .*param3="--bot" param4="coderabbit" terminal/);
+		assert.match(out, /----Only Codex \| .*param3="--bot" param4="codex" terminal/);
+	});
+
+	it('offers only CodeRabbit when Codex already reviewed the head', () => {
+		const pr = makePr({ checkRuns: [crRateLimited(2)], comments: [codexSummary(HEAD, 'completed', 5)] });
+		const out = renderMenu([assess(pr, config, 'alice', NOW)], ctx);
+		assert.ok(out.includes('--Request CodeRabbit review |'));
+		assert.ok(!out.includes('Only Codex'));
 	});
 
 	it('offers scheduling the retry and asking CodeRabbit now while it is rate limited', () => {

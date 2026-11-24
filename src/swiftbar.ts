@@ -162,7 +162,22 @@ function prItem(a: Assessment, ctx: MenuContext): string[] {
 		lines.push(`--${humanLine(a.approvals.human)} | size=12 href=${a.pr.url}/files`);
 	}
 	lines.push('-----');
-	if (a.aiActionable) lines.push(`--Request AI review | sfimage=sparkles ${action(ctx, ['ai', ref])}`);
+	if (a.aiActionable) {
+		// Codex is optional, so the author picks which bots to ask. With only one of them pending,
+		// there is nothing to pick.
+		const crPending = a.coderabbit.kind === 'needs_unstick' || a.coderabbit.kind === 'rate_limited';
+		const codexPending = !['disabled', 'reviewed', 'running'].includes(a.codex.kind);
+		if (crPending && codexPending) {
+			lines.push('--Request AI review | sfimage=sparkles');
+			lines.push(`----CodeRabbit, then Codex | ${action(ctx, ['ai', ref])}`);
+			lines.push(`----Only CodeRabbit (full review) | ${action(ctx, ['ai', ref, '--bot', 'coderabbit'])}`);
+			lines.push(`----Only Codex | ${action(ctx, ['ai', ref, '--bot', 'codex'])}`);
+		} else if (crPending) {
+			lines.push(`--Request CodeRabbit review | sfimage=sparkles ${action(ctx, ['ai', ref, '--bot', 'coderabbit'])}`);
+		} else if (codexPending) {
+			lines.push(`--Request Codex review | sfimage=sparkles ${action(ctx, ['ai', ref, '--bot', 'codex'])}`);
+		}
+	}
 	// CodeRabbit reviewed the head without approving it. The "again" submenu below is hidden while
 	// another AI action is pending, so this one stays reachable on its own.
 	const crWithoutApprove = a.coderabbit.kind === 'reviewed' && a.approvals.coderabbit.kind !== 'approved';

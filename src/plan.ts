@@ -15,6 +15,8 @@ export interface PlanOptions {
 	force?: boolean;
 	/** Only act on one bot. Asking for Codex explicitly skips the wait for CodeRabbit. */
 	only?: Bot;
+	/** Leave Codex out of PRs where nobody asked it yet (it is optional). */
+	codexOnlyInPlay?: boolean;
 }
 
 export interface Plan {
@@ -94,6 +96,13 @@ export function planAi(pr: PullRequest, config: Config, now: Date, options: Plan
 				: { kind: 'enqueue', bot: 'codex', body, why: 'forced, queued until CodeRabbit reviews again', force: true };
 		switch (codex.kind) {
 			case 'disabled':
+				break;
+			case 'never':
+				if (options.codexOnlyInPlay && options.only !== 'codex') {
+					actions.push({ kind: 'skip', bot: 'codex', why: 'not requested on this PR; use --bot codex to ask it' });
+					break;
+				}
+				actions.push(crReady ? { kind: 'post', bot: 'codex', body, why: 'not reviewed yet' } : { kind: 'enqueue', bot: 'codex', body, why: `queued until CodeRabbit reviews ${short(pr.headOid)}` });
 				break;
 			case 'reviewed':
 				actions.push(force ? forced() : { kind: 'skip', bot: 'codex', why: `already reviewed ${short(pr.headOid)}` });

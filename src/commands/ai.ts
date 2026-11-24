@@ -49,7 +49,7 @@ export async function ai(config: Config, options: AiOptions): Promise<number> {
 			continue;
 		}
 		const now = new Date();
-		const plan = planAi(pr, config, now, { force: options.force, only: options.only });
+		const plan = planAi(pr, config, now, { force: options.force, only: options.only, codexOnlyInPlay: options.mine });
 		console.log(color.bold(`#${pr.number} ${pr.title}`));
 		if (plan.blocked) {
 			console.log(`  ${color.yellow('!')} Not requesting reviews: ${plan.blocked}.`);

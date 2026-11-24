@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { planAi } from '../src/plan.ts';
-import { HEAD, NOW, check, codexSummary, comment, config, crPaused, crRateLimited, crRunning, makePr, rateLimitNotice } from './fixtures.ts';
+import { HEAD, NOW, OLD, check, codexSummary, comment, config, crPaused, crRateLimited, crRunning, makePr, rateLimitNotice } from './fixtures.ts';
 
 const kinds = (plan: ReturnType<typeof planAi>) => plan.actions.map((a) => `${a.bot}:${a.kind}`);
 
@@ -26,6 +26,13 @@ describe('planAi', () => {
 		const pr = makePr({ checkRuns: [crRateLimited(2)], comments: [rateLimitNotice('**8 minutes**', 2)] });
 		const plan = planAi(pr, config, NOW);
 		assert.deepEqual(kinds(plan), ['coderabbit:schedule', 'codex:enqueue']);
+	});
+
+	it('leaves Codex out of --mine where nobody asked it', () => {
+		const pr = makePr({ checkRuns: [crRateLimited(30)], comments: [rateLimitNotice('**17 seconds**', 30)] });
+		assert.deepEqual(kinds(planAi(pr, config, NOW, { codexOnlyInPlay: true })), ['coderabbit:post', 'codex:skip']);
+		const asked = makePr({ checkRuns: [crRateLimited(30)], comments: [rateLimitNotice('**17 seconds**', 30), codexSummary(OLD, 'completed', 90)] });
+		assert.deepEqual(kinds(planAi(asked, config, NOW, { codexOnlyInPlay: true })), ['coderabbit:post', 'codex:enqueue']);
 	});
 
 	it('posts the full review at once when forced during a rate limit', () => {

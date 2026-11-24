@@ -51,7 +51,8 @@ receipt or suggestions count for the head, and `gh wpr ai` does not ask it again
 
 Codex is optional: on a small PR you may not ask it at all. Until someone asks it on a PR (a
 `@codex review` comment or a Codex review), it shows as *not requested* and does not hold the PR
-back, and the PR is not your turn because of it. **Request AI review** still offers it.
+back, and the PR is not your turn because of it. **Request AI review** still offers it, and
+`gh wpr ai --mine` leaves it out of PRs where nobody asked it.
 
 ## Drafts and Notion AI
 
@@ -219,7 +220,8 @@ gh wpr swiftbar install        # or: gh wpr swiftbar install --dir <plugin folde
 
 Each PR has a submenu with the verdict of CodeRabbit, Codex and the reviewer (Notion AI on drafts)
 and the actions that make sense for it:
-**Request AI review**, **Ask CodeRabbit to review again** (when it reviewed the last commit without
+**Request AI review** (pick CodeRabbit then Codex, only CodeRabbit or only Codex; with just one of
+them pending it is a single **Request CodeRabbit review** / **Request Codex review**), **Ask CodeRabbit to review again** (when it reviewed the last commit without
 approving it), **Ask bob to review**, **Triage comments with Claude Code** (opens a
 terminal) and **Open on GitHub**. When both bots already reviewed the last commit, **Request AI review
 again** asks anyway: CodeRabbit then Codex (Codex waits for the new CodeRabbit review), or only one of
