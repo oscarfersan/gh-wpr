@@ -55,6 +55,16 @@ async function cardStep(config: Config, entry: { repo: string; number: number; b
 	}
 }
 
+/**
+ * The merge commit's subject, as `git merge` writes it locally, so merges made from
+ * here look like the rest of the history: "Merge branch 'feature/x' into development",
+ * with no " into …" when the base is master or main.
+ */
+export function mergeCommitTitle(entry: { headRef: string; baseRef: string }): string {
+	const into = entry.baseRef === 'master' || entry.baseRef === 'main' ? '' : ` into ${entry.baseRef}`;
+	return `Merge branch '${entry.headRef}'${into}`;
+}
+
 /** Merges a queued PR, deletes its branch and updates its card. */
 async function mergeEntry(config: Config, entry: FinishEntry, dryRun: boolean): Promise<{ lines: string[]; commit: string | null }> {
 	const lines: string[] = [];
@@ -63,8 +73,10 @@ async function mergeEntry(config: Config, entry: FinishEntry, dryRun: boolean): 
 		lines.push(await cardStep(config, entry, entry.headOid, true));
 		return { lines, commit: null };
 	}
+	const message =
+		config.finish.mergeMethod === 'merge' ? ['-f', `commit_title=${mergeCommitTitle(entry)}`, '-f', 'commit_message='] : [];
 	const commit = (
-		await gh(['api', '-X', 'PUT', `repos/${entry.repo}/pulls/${entry.number}/merge`, '-f', `merge_method=${config.finish.mergeMethod}`, '-f', `sha=${entry.headOid}`, '--jq', '.sha'])
+		await gh(['api', '-X', 'PUT', `repos/${entry.repo}/pulls/${entry.number}/merge`, '-f', `merge_method=${config.finish.mergeMethod}`, ...message, '-f', `sha=${entry.headOid}`, '--jq', '.sha'])
 	).trim();
 	lines.push(`${color.green('✓')} Merged ${label(entry)} into ${entry.baseRef} as ${short(commit)}`);
 	if (config.finish.deleteBranch && !entry.isCrossRepository) {

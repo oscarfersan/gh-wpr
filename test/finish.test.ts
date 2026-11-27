@@ -11,7 +11,7 @@ import { decideFinish } from '../src/finish/queue.ts';
 import { finishReadiness, shortSkipped } from '../src/finish/ready.ts';
 import type { FinishEntry } from '../src/finish/queue.ts';
 import { rebaseOntoBase, worktreeDir } from '../src/finish/rebase.ts';
-import { describeCard } from '../src/commands/finish.ts';
+import { describeCard, mergeCommitTitle } from '../src/commands/finish.ts';
 import { terminalScript } from '../src/commands/terminal.ts';
 import { renderMenu } from '../src/swiftbar.ts';
 import { assess } from '../src/turn.ts';
@@ -39,6 +39,13 @@ const schema: Schema = {
 		Commit: { type: 'rich_text', options: [] },
 	},
 };
+
+describe('mergeCommitTitle', () => {
+	it('reads like a local git merge', () => {
+		assert.equal(mergeCommitTitle({ headRef: 'bugfix/x', baseRef: 'development' }), "Merge branch 'bugfix/x' into development");
+		assert.equal(mergeCommitTitle({ headRef: 'hotfix/v1.2.3', baseRef: 'master' }), "Merge branch 'hotfix/v1.2.3'");
+	});
+});
 
 describe('tracker config', () => {
 	it('defaults to no tracker', () => {

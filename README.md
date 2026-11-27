@@ -163,7 +163,8 @@ changes, or a draft, always blocks it.
 3. **Wait for CI** on the new commit. The PR is queued on your machine, and every refresh of the menu
    bar (or `gh wpr tick`) checks it. A failed CI, a new push or a conflict cancels it, with a notification.
 4. **Merge** with `finish.mergeMethod` (`merge`, `squash` or `rebase`) and delete the branch
-   (`finish.deleteBranch`).
+   (`finish.deleteBranch`). With `merge`, the merge commit reads like a local `git merge`:
+   `Merge branch 'feature/x' into development`, with no body (and no ` into …` for master or main).
 5. **Update the cards**, if `tracker` is set: every card whose PR property links to the PR (one PR can
    close several cards) gets the status for the PR's base branch and the merge commit. When no card
    matches, it says so. A queued PR that someone merges on github.com still gets its card updated.
